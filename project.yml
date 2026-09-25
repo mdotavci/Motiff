@@ -1,0 +1,56 @@
+name: Motiff
+
+options:
+  bundleIdPrefix: com.mdotavci
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Your Apple Developer Team ID (Xcode > Settings > Accounts). Set it here, not in
+    # Xcode's Signing tab, or `xcodegen` will wipe it on the next run.
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  Motiff:
+    type: application
+    platform: iOS
+    sources:
+      - Motiff
+      - Shared
+    dependencies:
+      - target: MotiffShare
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mdotavci.motiff
+        CODE_SIGN_ENTITLEMENTS: Motiff/Motiff.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Motiff
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    scheme: {}
+
+  MotiffShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MotiffShare
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mdotavci.motiff.share
+        CODE_SIGN_ENTITLEMENTS: MotiffShare/MotiffShare.entitlements
+        # Xcode generates the standard keys and merges in NSExtension from this file.
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: MotiffShare/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Motiff
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
