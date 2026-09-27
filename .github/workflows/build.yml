@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  ios:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -73,4 +73,55 @@ jobs:
           path: |
             launch.png
             build.log
+          if-no-files-found: ignore
+
+  mac:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      # Same as pressing Run in Xcode: signing stays on, no team set.
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Motiff.xcodeproj \
+            -scheme MotiffMac \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            | tee build-mac.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build-mac.log
+
+      - name: Launch
+        run: |
+          APP=build/Build/Products/Debug/Motiff.app
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -q app-sandbox
+          echo "Sandboxed"
+          open "$APP"
+          sleep 10
+          screencapture -x launch-mac.png || true
+          pgrep -x Motiff
+          echo "App is running after 10s"
+          # The app creates Media/ and Incoming/ in its sandbox container on launch.
+          LIB="$HOME/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/Motiff"
+          ls "$LIB"
+          test -d "$LIB/Media" && test -d "$LIB/Incoming"
+          echo "Library folders created"
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: |
+            launch-mac.png
+            build-mac.log
           if-no-files-found: ignore

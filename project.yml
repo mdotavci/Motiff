@@ -4,6 +4,7 @@ options:
   bundleIdPrefix: com.mdotavci
   deploymentTarget:
     iOS: "18.0"
+    macOS: "15.0"
   createIntermediateGroups: true
 
 settings:
@@ -17,6 +18,24 @@ settings:
     DEVELOPMENT_TEAM: ""
 
 targets:
+  MotiffMac:
+    type: application
+    platform: macOS
+    sources:
+      - Motiff
+      - Shared
+    settings:
+      base:
+        PRODUCT_NAME: Motiff
+        PRODUCT_BUNDLE_IDENTIFIER: com.mdotavci.motiff
+        CODE_SIGN_ENTITLEMENTS: Mac/Motiff.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Motiff
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.graphics-design
+    scheme: {}
+
   Motiff:
     type: application
     platform: iOS

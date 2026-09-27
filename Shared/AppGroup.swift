@@ -1,18 +1,29 @@
 import Foundation
 
-/// Shared locations for the app and the Share Extension.
+/// Where Motiff keeps its library on disk.
+///
+/// iOS: the App Group container, shared by the app and the Share Extension.
+/// macOS: the app's own sandbox container for now. The Mac Share Extension step moves it
+/// into an App Group, which on the Mac needs your Team ID.
 enum AppGroup {
     static let identifier = "group.com.mdotavci.motiff"
 
     /// False when the App Group entitlement is missing (e.g. signing not set up).
-    /// We then fall back to the app's own Application Support folder so things still run.
     static var isAvailable: Bool {
+        #if os(macOS)
+        false
+        #else
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier) != nil
+        #endif
     }
 
     static var containerURL: URL {
+        #if os(macOS)
+        URL.applicationSupportDirectory.appending(path: "Motiff", directoryHint: .isDirectory)
+        #else
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
             ?? URL.applicationSupportDirectory
+        #endif
     }
 
     /// Original media files, one per Reference.

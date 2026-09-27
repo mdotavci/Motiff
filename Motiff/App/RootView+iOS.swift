@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 
 enum AppTab: Hashable {
@@ -30,3 +31,4 @@ struct RootView: View {
 #Preview {
     RootView()
 }
+#endif
