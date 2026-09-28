@@ -121,7 +121,40 @@ extension Reference {
         recipe.map(\.text).filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
+    /// The prompt to copy: the original one if there is one, else the recipe joined up.
+    var copyablePrompt: String? {
+        if let promptRaw, !promptRaw.isEmpty { return promptRaw }
+        let assembled = assembledPrompt
+        return assembled.isEmpty ? nil : assembled
+    }
+
+    /// Height divided by width, kept between 1:2 and 2:1 so no tile gets absurdly thin.
+    var displayAspectRatio: CGFloat {
+        guard width > 0, height > 0 else { return 1 }
+        return min(max(CGFloat(height) / CGFloat(width), 0.5), 2)
+    }
+
+    /// Every Remix made from this Reference, and Remixes of those, depth first.
+    var descendants: [Reference] {
+        children.flatMap { [$0] + $0.descendants }
+    }
+
     var mediaURL: URL {
         MediaStore.url(for: mediaFilename)
+    }
+}
+
+// MARK: - Deleting
+
+extension Reference {
+    /// Deletes this Reference, its Remixes (the lineage cascades), and all their media files.
+    @MainActor
+    static func delete(_ reference: Reference, in context: ModelContext) {
+        let doomed = reference.descendants.reversed() + [reference]
+        for item in doomed {
+            MediaStore.delete(item.mediaFilename)
+            context.delete(item)
+        }
+        try? context.save()
     }
 }

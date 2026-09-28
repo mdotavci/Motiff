@@ -7,6 +7,8 @@ enum Theme {
     /// 8pt grid.
     static let unit: CGFloat = 8
     static let gutter: CGFloat = 16
+    /// Gap between grid tiles. Tiles have square corners, so the grid reads as one wall.
+    static let gridGap: CGFloat = 2
 }
 
 extension View {

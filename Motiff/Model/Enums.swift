@@ -16,6 +16,16 @@ enum Origin: String, Codable, CaseIterable {
         case .remix: "R"
         }
     }
+
+    /// The full word, for VoiceOver and menus.
+    var label: String {
+        switch self {
+        case .found: "Found"
+        case .generated: "Generated"
+        case .mine: "Mine"
+        case .remix: "Remix"
+        }
+    }
 }
 
 enum ReferenceStatus: String, Codable, CaseIterable {
