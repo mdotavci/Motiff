@@ -67,6 +67,7 @@ struct ThumbnailImage: View {
     let url: URL
     /// Longest side the image is drawn at, in points.
     let pointSize: CGFloat
+    var contentMode: ContentMode = .fill
 
     @Environment(\.displayScale) private var displayScale
     @State private var thumbnail: DecodedThumbnail?
@@ -76,12 +77,13 @@ struct ThumbnailImage: View {
     }
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(.quaternary)
+        Group {
             if let thumbnail {
                 Image(decorative: thumbnail.cgImage, scale: 1)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                Rectangle().fill(.quaternary)
             }
         }
         .task(id: "\(url.path)#\(maxPixelSize)") {

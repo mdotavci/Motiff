@@ -11,17 +11,17 @@ struct LibraryView: View {
     @State private var pendingDelete: Reference?
 
     var body: some View {
-        #if os(iOS)
         NavigationStack {
             content
                 .navigationTitle("Library")
+                #if os(macOS)
+                .navigationSubtitle(references.count == 1 ? "1 reference" : "\(references.count) references")
+                .toolbar { densityControls }
+                #endif
+                .navigationDestination(for: Reference.self) { reference in
+                    ReferenceDetailView(reference: reference)
+                }
         }
-        #else
-        content
-            .navigationTitle("Library")
-            .navigationSubtitle(references.count == 1 ? "1 reference" : "\(references.count) references")
-            .toolbar { densityControls }
-        #endif
     }
 
     @ViewBuilder
@@ -36,12 +36,15 @@ struct LibraryView: View {
                     spacing: Theme.gridGap,
                     aspectRatio: \.displayAspectRatio
                 ) { reference in
-                    ReferenceTile(reference: reference, width: tileWidth)
-                        .contextMenu {
-                            ReferenceMenu(reference: reference, boards: boards) {
-                                pendingDelete = reference
-                            }
+                    NavigationLink(value: reference) {
+                        ReferenceTile(reference: reference, width: tileWidth)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        ReferenceMenu(reference: reference, boards: boards) {
+                            pendingDelete = reference
                         }
+                    }
                 }
                 .padding(Theme.gridGap)
                 .animation(.default, value: columnCount)

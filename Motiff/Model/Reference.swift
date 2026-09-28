@@ -63,6 +63,8 @@ final class Reference {
 
     var statusRaw: String = ReferenceStatus.keep.rawValue
     var aiStateRaw: String = AIState.pending.rawValue
+    /// First time the detail view was opened. Nil means it's still new (Inbox).
+    var openedAt: Date?
 
     init(mediaFilename: String, mediaType: MediaType, width: Int, height: Int, origin: Origin) {
         self.mediaFilename = mediaFilename
@@ -126,6 +128,12 @@ extension Reference {
         if let promptRaw, !promptRaw.isEmpty { return promptRaw }
         let assembled = assembledPrompt
         return assembled.isEmpty ? nil : assembled
+    }
+
+    /// Width divided by height, unclamped. For showing the media whole.
+    var mediaAspectRatio: CGFloat {
+        guard width > 0, height > 0 else { return 1 }
+        return CGFloat(width) / CGFloat(height)
     }
 
     /// Height divided by width, kept between 1:2 and 2:1 so no tile gets absurdly thin.
