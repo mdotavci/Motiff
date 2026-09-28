@@ -25,7 +25,7 @@ its own shell (window layout, navigation) and its own capture methods.
 ## Phase 1 — Mac
 
 0. Skeleton: Mac target, sidebar, Settings window, CI launch check. *(done)*
-1. Data layer, media storage, and 12 seed References (shared code)
+1. Data layer, media storage, and 12 seed References (shared code) *(done)*
 2. Library masonry grid: columns adapt to the window width, ⌘+ / ⌘− change density, F/G/M/R letters, context menu
 3. Reference detail: large media, then Recipe, Read, Why, Source and Lineage. GIF/video loops muted.
 4. Capture on the Mac: drag and drop from Finder or a browser, paste (⌘V image and prompt text), File › Import (⌘O). A Why popover after saving.

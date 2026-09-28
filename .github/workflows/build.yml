@@ -54,16 +54,21 @@ jobs:
           echo "Share Extension embedded"
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl launch "$UDID" com.mdotavci.motiff
-          sleep 8
+          sleep 10
           xcrun simctl io "$UDID" screenshot launch.png
           xcrun simctl spawn "$UDID" launchctl list | grep -q UIKitApplication:com.mdotavci.motiff
-          echo "App is running after 8s"
-          # The app creates Media/ and Incoming/ in the App Group container on launch.
+          echo "App is running after 10s"
+          # The app creates Media/ and Incoming/ in the App Group container on launch,
+          # then seeds 12 placeholder References into Media/ on first run.
           GROUP=$(xcrun simctl get_app_container "$UDID" com.mdotavci.motiff group.com.mdotavci.motiff)
           echo "App Group container: $GROUP"
           ls "$GROUP"
           test -d "$GROUP/Media" && test -d "$GROUP/Incoming"
           echo "App Group connected"
+          COUNT=$(find "$GROUP/Media" -type f -name '*.png' | wc -l | tr -d ' ')
+          echo "Seeded media files: $COUNT"
+          [ "$COUNT" -ge 12 ]
+          echo "Seed data present"
 
       - name: Upload screenshot
         if: always()
@@ -106,15 +111,20 @@ jobs:
           codesign -d --entitlements - "$APP" 2>/dev/null | grep -q app-sandbox
           echo "Sandboxed"
           open "$APP"
-          sleep 10
+          sleep 12
           screencapture -x launch-mac.png || true
           pgrep -x Motiff
-          echo "App is running after 10s"
-          # The app creates Media/ and Incoming/ in its sandbox container on launch.
+          echo "App is running after 12s"
+          # The app creates Media/ and Incoming/ in its sandbox container on launch,
+          # then seeds 12 placeholder References into Media/ on first run.
           LIB="$HOME/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/Motiff"
           ls "$LIB"
           test -d "$LIB/Media" && test -d "$LIB/Incoming"
           echo "Library folders created"
+          COUNT=$(find "$LIB/Media" -type f -name '*.png' | wc -l | tr -d ' ')
+          echo "Seeded media files: $COUNT"
+          [ "$COUNT" -ge 12 ]
+          echo "Seed data present"
 
       - name: Upload screenshot
         if: always()
