@@ -1,0 +1,21 @@
+import Foundation
+import SwiftData
+
+/// A "relates to" link between two nodes on the same Canvas, drawn dashed.
+/// "Belongs to" isn't stored here: it's `CanvasNode.parent`.
+@Model
+final class CanvasLink {
+    var id: UUID = UUID()
+    /// A short optional word or two on the line, like "contrast" or "next step".
+    var label: String?
+
+    var canvas: Canvas?
+    /// Inverse on `CanvasNode.outgoing`.
+    var from: CanvasNode?
+    /// Inverse on `CanvasNode.incoming`.
+    var to: CanvasNode?
+
+    init(label: String? = nil) {
+        self.label = label
+    }
+}

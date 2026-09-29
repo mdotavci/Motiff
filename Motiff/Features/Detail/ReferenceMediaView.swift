@@ -10,6 +10,16 @@ struct ReferenceMediaView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        if !reference.hasMedia {
+            TypographicCover(text: reference.copyablePrompt ?? "")
+                .aspectRatio(reference.mediaAspectRatio, contentMode: .fit)
+        } else {
+            media
+        }
+    }
+
+    @ViewBuilder
+    private var media: some View {
         switch reference.mediaType {
         case .image:
             still

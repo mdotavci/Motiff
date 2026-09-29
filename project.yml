@@ -57,6 +57,23 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
     scheme: {}
 
+  # Unit tests for the model layer, run on the Mac. No host app: the model sources are compiled
+  # in directly, so tests don't launch Motiff or touch its library.
+  MotiffTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - MotiffTests
+      - Motiff/Model
+      - Motiff/Canvas/Model
+      - Motiff/Canvas/CanvasGraph.swift
+      - Motiff/Storage
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mdotavci.motiff.tests
+        GENERATE_INFOPLIST_FILE: YES
+
   MotiffShare:
     type: app-extension
     platform: iOS
@@ -73,3 +90,12 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Motiff
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
+
+schemes:
+  MotiffTests:
+    build:
+      targets:
+        MotiffTests: all
+    test:
+      targets:
+        - MotiffTests

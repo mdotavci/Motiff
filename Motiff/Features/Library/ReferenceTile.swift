@@ -10,7 +10,11 @@ struct ReferenceTile: View {
         Color.clear
             .aspectRatio(1 / reference.displayAspectRatio, contentMode: .fit)
             .overlay {
-                ThumbnailImage(url: reference.mediaURL, pointSize: width * max(reference.displayAspectRatio, 1))
+                if reference.hasMedia {
+                    ThumbnailImage(url: reference.mediaURL, pointSize: width * max(reference.displayAspectRatio, 1))
+                } else {
+                    TypographicCover(text: reference.copyablePrompt ?? "")
+                }
             }
             .overlay(alignment: .topLeading) {
                 OriginBadge(origin: reference.origin)
@@ -37,7 +41,7 @@ struct ReferenceTile: View {
     }
 
     private var accessibilityText: String {
-        var parts = [reference.origin.label, reference.mediaType.label]
+        var parts = [reference.origin.label, reference.hasMedia ? reference.mediaType.label : "Prompt"]
         let why = reference.why.map(\.label)
         if !why.isEmpty { parts.append("kept for " + why.joined(separator: ", ")) }
         if let note = reference.whyNote, !note.isEmpty { parts.append(note) }

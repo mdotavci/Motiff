@@ -20,6 +20,7 @@ struct ReferenceMenu: View {
         Button("Copy Image", systemImage: "doc.on.doc") {
             Pasteboard.copyImage(at: reference.mediaURL)
         }
+        .disabled(!reference.hasMedia)
 
         if !boards.isEmpty {
             Menu("Boards") {
@@ -33,6 +34,7 @@ struct ReferenceMenu: View {
         Button("Show in Finder", systemImage: "folder") {
             NSWorkspace.shared.activateFileViewerSelecting([reference.mediaURL])
         }
+        .disabled(!reference.hasMedia)
         #endif
 
         Divider()

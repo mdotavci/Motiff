@@ -8,7 +8,7 @@ struct MotiffApp: App {
     init() {
         AppGroup.prepareDirectories()
         do {
-            container = try ModelContainer(for: Reference.self, Board.self)
+            container = try ModelContainer(for: MotiffSchema.schema)
         } catch {
             fatalError("Could not create the SwiftData store: \(error)")
         }
@@ -27,6 +27,7 @@ struct MotiffApp: App {
         #if os(macOS)
         .defaultSize(width: 1200, height: 800)
         .commands {
+            CanvasCommands()
             LibraryCommands()
         }
         #endif

@@ -27,6 +27,8 @@ enum MediaStore {
     }
 
     static func delete(_ filename: String) {
+        // An empty name would point at the Media folder itself.
+        guard !filename.isEmpty else { return }
         try? FileManager.default.removeItem(at: url(for: filename))
     }
 }

@@ -51,13 +51,17 @@ struct ReferenceDetailView: View {
                     Button("Copy Prompt", systemImage: "text.quote") { Pasteboard.copy(prompt) }
                         .help("Copy the prompt")
                 }
-                #if os(macOS)
-                Button("Show in Finder", systemImage: "folder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([reference.mediaURL])
+                if reference.hasMedia {
+                    #if os(macOS)
+                    Button("Show in Finder", systemImage: "folder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([reference.mediaURL])
+                    }
+                    .help("Show the media file in Finder")
+                    #endif
+                    ShareLink(item: reference.mediaURL)
+                } else if let prompt = reference.copyablePrompt {
+                    ShareLink(item: prompt)
                 }
-                .help("Show the media file in Finder")
-                #endif
-                ShareLink(item: reference.mediaURL)
             }
         }
         .onAppear {

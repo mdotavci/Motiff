@@ -42,6 +42,47 @@ enum WhyChip: String, Codable, CaseIterable {
     case type, color, layout, light, texture, motion, mood, idea
 
     var label: String { rawValue.capitalized }
+
+    /// The Recipe part this reason points at, if there is one.
+    var recipePartKind: RecipePartKind? {
+        switch self {
+        case .color: .color
+        case .layout: .composition
+        case .light: .light
+        case .texture: .texture
+        case .mood: .mood
+        case .type, .motion, .idea: nil
+        }
+    }
+}
+
+/// What a prompt is for. Nil on References that aren't prompts.
+enum PromptPurpose: String, Codable, CaseIterable {
+    /// Image and video generation.
+    case image
+    /// Writing, editing, rewriting.
+    case text
+    /// App and dev prompts, e.g. for Claude Code.
+    case code
+    case other
+
+    var label: String {
+        switch self {
+        case .image: "Image"
+        case .text: "Text"
+        case .code: "Code"
+        case .other: "Other"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .image: "photo"
+        case .text: "text.alignleft"
+        case .code: "chevron.left.forwardslash.chevron.right"
+        case .other: "ellipsis"
+        }
+    }
 }
 
 /// A row in a Recipe card. Order here is the order shown in the card.

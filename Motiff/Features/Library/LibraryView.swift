@@ -83,11 +83,17 @@ struct LibraryView: View {
 
     private func deleteMessage(for reference: Reference) -> String {
         let remixes = reference.descendants.count
-        switch remixes {
-        case 0: return "The media file is removed too. Boards keep their other references."
-        case 1: return "Its remix is deleted too. The media files are removed."
-        default: return "Its \(remixes) remixes are deleted too. The media files are removed."
+        let lineage = switch remixes {
+        case 0: "The media file is removed too. Boards keep their other references."
+        case 1: "Its remix is deleted too. The media files are removed."
+        default: "Its \(remixes) remixes are deleted too. The media files are removed."
         }
+        let canvases = switch reference.canvasCountWithRemixes {
+        case 0: ""
+        case 1: " It's also taken off the canvas it's on."
+        case let count: " It's also taken off the \(count) canvases it's on."
+        }
+        return lineage + canvases
     }
 
     #if os(macOS)

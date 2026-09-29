@@ -4,10 +4,16 @@ import SwiftData
 
 /// Twelve References so the app is never opened to an empty grid, created once, the first
 /// time the SwiftData store has none. All media is generated placeholder art — no image
-/// assets are shipped.
+/// assets are shipped. Then one example Canvas built from them (`SeedData+Canvas.swift`).
 enum SeedData {
     @MainActor
     static func seedIfNeeded(context: ModelContext) {
+        seedReferencesIfNeeded(context: context)
+        seedCanvasIfNeeded(context: context)
+    }
+
+    @MainActor
+    private static func seedReferencesIfNeeded(context: ModelContext) {
         let existing = (try? context.fetchCount(FetchDescriptor<Reference>())) ?? 0
         guard existing == 0 else { return }
 
@@ -202,6 +208,7 @@ enum SeedData {
         reference.sourceURL = spec.sourceURL
         reference.creator = spec.creator
         reference.promptRaw = spec.recipe.isEmpty ? nil : reference.assembledPrompt
+        reference.purpose = spec.recipe.isEmpty ? nil : .image
         reference.aiState = .done
         return reference
     }
