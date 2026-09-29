@@ -6,9 +6,13 @@ struct TypographicCover: View {
     let text: String
     var background: HexColor?
 
+    /// Room at the top for the badges tiles and cards put in their corners.
+    static let badgeClearance: CGFloat = 30
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
+            let inset = max(8, width * 0.07)
             Text(Self.leadingWords(of: text))
                 .font(.system(size: max(12, width * 0.1), weight: .bold))
                 .lineSpacing(0)
@@ -16,7 +20,9 @@ struct TypographicCover: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(5)
                 .minimumScaleFactor(0.8)
-                .padding(max(8, width * 0.07))
+                .padding(.horizontal, inset)
+                .padding(.bottom, inset)
+                .padding(.top, max(inset, Self.badgeClearance))
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .background(background?.color ?? Color.primary.opacity(0.08))
