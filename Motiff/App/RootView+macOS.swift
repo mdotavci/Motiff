@@ -1,4 +1,5 @@
 #if os(macOS)
+import SwiftData
 import SwiftUI
 
 enum SidebarItem: Hashable, CaseIterable {
@@ -19,26 +20,143 @@ enum SidebarItem: Hashable, CaseIterable {
         case .boards: "rectangle.stack"
         }
     }
+
+    var selection: SidebarSelection {
+        switch self {
+        case .inbox: .inbox
+        case .library: .library
+        case .boards: .boards
+        }
+    }
+}
+
+/// What the sidebar has selected: a fixed section, or one Canvas file.
+enum SidebarSelection: Hashable {
+    case inbox, library, boards
+    case canvas(UUID)
 }
 
 struct RootView: View {
-    @State private var selection: SidebarItem? = .library
+    @Environment(\.modelContext) private var context
+    @Query(sort: \Canvas.createdAt) private var canvases: [Canvas]
+
+    @State private var selection: SidebarSelection? = .library
+    @State private var renaming: Canvas?
+    @State private var draftTitle = ""
+    @State private var pendingDelete: Canvas?
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarItem.allCases, id: \.self, selection: $selection) { item in
-                Label(item.title, systemImage: item.systemImage)
+            List(selection: $selection) {
+                ForEach(SidebarItem.allCases, id: \.self) { item in
+                    Label(item.title, systemImage: item.systemImage)
+                        .tag(item.selection)
+                }
+                Section {
+                    ForEach(canvases) { canvas in
+                        Label(canvas.displayTitle, systemImage: "point.3.connected.trianglepath.dotted")
+                            .tag(SidebarSelection.canvas(canvas.id))
+                            .contextMenu {
+                                Button("Rename…") {
+                                    draftTitle = canvas.title
+                                    renaming = canvas
+                                }
+                                Divider()
+                                Button("Delete…", role: .destructive) { pendingDelete = canvas }
+                            }
+                    }
+                } header: {
+                    HStack {
+                        Text("Canvases")
+                        Spacer()
+                        Button("New Canvas", systemImage: "plus", action: newCanvas)
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.borderless)
+                            .help("New Canvas (⌘N)")
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
-            switch selection {
-            case .inbox: InboxView()
-            case .boards: BoardsView()
-            case .library, nil: LibraryView()
-            }
+            detail
         }
         .tint(.primary)
+        .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas))
+        .alert("Rename Canvas", isPresented: isRenaming) {
+            TextField("Title", text: $draftTitle)
+            Button("Rename") {
+                renaming?.title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                CanvasGraph.touch(renaming)
+                try? context.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete “\(pendingDelete?.displayTitle ?? "")”?",
+            isPresented: isConfirmingDelete,
+            presenting: pendingDelete
+        ) { canvas in
+            Button("Delete Canvas", role: .destructive) { delete(canvas) }
+        } message: { _ in
+            Text("Its Ideas, notes and links are deleted. References stay in the Library.")
+        }
+        #if DEBUG
+        .task { await applyLaunchRoute() }
+        #endif
     }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection {
+        case .inbox:
+            InboxView()
+        case .boards:
+            BoardsView()
+        case .canvas(let id):
+            if let canvas = canvases.first(where: { $0.id == id }) {
+                CanvasSummaryView(canvas: canvas)
+            } else {
+                EmptyState(title: "Canvas", message: "This canvas was deleted.")
+            }
+        case .library, nil:
+            LibraryView()
+        }
+    }
+
+    private var isRenaming: Binding<Bool> {
+        Binding { renaming != nil } set: { if !$0 { renaming = nil } }
+    }
+
+    private var isConfirmingDelete: Binding<Bool> {
+        Binding { pendingDelete != nil } set: { if !$0 { pendingDelete = nil } }
+    }
+
+    private func newCanvas() {
+        let new = CanvasGraph.makeCanvas(title: "", in: context)
+        try? context.save()
+        selection = .canvas(new.canvas.id)
+    }
+
+    private func delete(_ canvas: Canvas) {
+        if selection == .canvas(canvas.id) { selection = .library }
+        CanvasGraph.deleteCanvas(canvas, in: context)
+        try? context.save()
+    }
+
+    #if DEBUG
+    /// Opens the screen named by `-MotiffOpen`, then saves a snapshot if `-MotiffSnapshot` asks.
+    private func applyLaunchRoute() async {
+        guard let route = DebugLaunchRoute.open else { return }
+        // Seeding also runs at launch; give it a moment so a seeded Canvas can be found.
+        try? await Task.sleep(for: .seconds(1.5))
+        let all = (try? context.fetch(FetchDescriptor<Canvas>())) ?? []
+        selection = DebugLaunchRoute.selection(for: route, canvases: all)
+        if let name = DebugLaunchRoute.snapshotName {
+            try? await Task.sleep(for: .seconds(DebugLaunchRoute.settleSeconds))
+            DebugLaunchRoute.writeSnapshot(named: name)
+        }
+    }
+    #endif
 }
 
 #Preview {

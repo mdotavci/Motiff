@@ -2,14 +2,16 @@ import Foundation
 import SwiftData
 
 /// The only object in Motiff. Always visual first: a prompt never exists without a Reference,
-/// and a Reference never exists without media.
+/// and a Reference is never shown without a visual. Text and Code prompts may have no media
+/// file; they're drawn with a typographic cover instead (`hasMedia` is false).
 @Model
 final class Reference {
     var id: UUID = UUID()
     var createdAt: Date = Date.now
 
-    // MARK: Media (required)
+    // MARK: Media
 
+    /// Empty for a prompt that has no media (see `hasMedia`).
     var mediaFilename: String = ""
     var mediaTypeRaw: String = MediaType.image.rawValue
     var width: Int = 0
@@ -26,6 +28,8 @@ final class Reference {
     var recipeData: Data?
     /// True when the recipe was written by AI from the image, not the original prompt.
     var recipeIsDescribed: Bool = false
+    /// What the prompt is for. Nil for References that aren't prompts.
+    var purposeRaw: String?
 
     // MARK: Model + settings
 
@@ -59,10 +63,18 @@ final class Reference {
     /// Inverse declared on `Board.references`. A Reference can live on many Boards.
     var boards: [Board] = []
 
+    // MARK: Canvases
+
+    /// Every card that shows this Reference, on any Canvas. The same object, never a copy,
+    /// so deleting the Reference takes its cards off every Canvas.
+    @Relationship(deleteRule: .cascade, inverse: \CanvasNode.reference) var canvasNodes: [CanvasNode] = []
+
     // MARK: Status + AI state
 
     var statusRaw: String = ReferenceStatus.keep.rawValue
     var aiStateRaw: String = AIState.pending.rawValue
+    /// First time the detail view was opened. Nil means it's still new (Inbox).
+    var openedAt: Date?
 
     init(mediaFilename: String, mediaType: MediaType, width: Int, height: Int, origin: Origin) {
         self.mediaFilename = mediaFilename
@@ -96,6 +108,16 @@ extension Reference {
         set { aiStateRaw = newValue.rawValue }
     }
 
+    var purpose: PromptPurpose? {
+        get { purposeRaw.flatMap(PromptPurpose.init(rawValue:)) }
+        set { purposeRaw = newValue?.rawValue }
+    }
+
+    /// False for a Text or Code prompt saved without an image.
+    var hasMedia: Bool {
+        !mediaFilename.isEmpty
+    }
+
     var why: [WhyChip] {
         get { whyChipsRaw.compactMap(WhyChip.init(rawValue:)) }
         set { whyChipsRaw = newValue.map(\.rawValue) }
@@ -121,7 +143,81 @@ extension Reference {
         recipe.map(\.text).filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
+    /// The prompt to copy: the original one if there is one, else the recipe joined up.
+    var copyablePrompt: String? {
+        if let promptRaw, !promptRaw.isEmpty { return promptRaw }
+        let assembled = assembledPrompt
+        return assembled.isEmpty ? nil : assembled
+    }
+
+    /// Width divided by height, unclamped. For showing the media whole.
+    /// A typographic cover is 4:5.
+    var mediaAspectRatio: CGFloat {
+        guard hasMedia else { return 0.8 }
+        guard width > 0, height > 0 else { return 1 }
+        return CGFloat(width) / CGFloat(height)
+    }
+
+    /// Height divided by width, kept between 1:2 and 2:1 so no tile gets absurdly thin.
+    var displayAspectRatio: CGFloat {
+        guard hasMedia else { return 1.25 }
+        guard width > 0, height > 0 else { return 1 }
+        return min(max(CGFloat(height) / CGFloat(width), 0.5), 2)
+    }
+
+    /// A short line that stands in for a title, which References don't have: the Why note,
+    /// else the Recipe part the first Why chip points at, else the subject, else the prompt's
+    /// first line, else origin and reason ("Mine · Texture").
+    var caption: String {
+        if let note = whyNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return note
+        }
+        let parts = recipe.filter { !$0.text.isEmpty }
+        if let kind = why.first?.recipePartKind, let part = parts.first(where: { $0.kind == kind }) {
+            return part.text
+        }
+        if let subject = parts.first(where: { $0.kind == .subject }) {
+            return subject.text
+        }
+        if let prompt = copyablePrompt {
+            return CanvasNode.firstLine(prompt)
+        }
+        return ([origin.label] + why.prefix(1).map(\.label)).joined(separator: " · ")
+    }
+
+    /// Number of Canvases this Reference or any of its Remixes is on.
+    var canvasCountWithRemixes: Int {
+        let nodes = ([self] + descendants).flatMap(\.canvasNodes)
+        return Set(nodes.compactMap { $0.canvas?.id }).count
+    }
+
+    /// Every Remix made from this Reference, and Remixes of those, depth first.
+    var descendants: [Reference] {
+        children.flatMap { [$0] + $0.descendants }
+    }
+
     var mediaURL: URL {
         MediaStore.url(for: mediaFilename)
+    }
+}
+
+// MARK: - Deleting
+
+extension Reference {
+    /// Deletes this Reference, its Remixes (the lineage cascades), all their media files,
+    /// and their cards on every Canvas.
+    @MainActor
+    static func delete(_ reference: Reference, in context: ModelContext) {
+        let doomed = reference.descendants.reversed() + [reference]
+        for item in doomed {
+            for node in item.canvasNodes {
+                CanvasGraph.deleteNode(node, in: context)
+            }
+            if item.hasMedia {
+                MediaStore.delete(item.mediaFilename)
+            }
+            context.delete(item)
+        }
+        try? context.save()
     }
 }

@@ -26,8 +26,8 @@ its own shell (window layout, navigation) and its own capture methods.
 
 0. Skeleton: Mac target, sidebar, Settings window, CI launch check. *(done)*
 1. Data layer, media storage, and 12 seed References (shared code) *(done)*
-2. Library masonry grid: columns adapt to the window width, ⌘+ / ⌘− change density, F/G/M/R letters, context menu
-3. Reference detail: large media, then Recipe, Read, Why, Source and Lineage. GIF/video loops muted.
+2. Library masonry grid: columns adapt to the window width, ⌘+ / ⌘− change density, F/G/M/R letters, context menu *(done)*
+3. Reference detail: large media, then Recipe, Read, Why, Source and Lineage. GIF/video loops muted. *(done)*
 4. Capture on the Mac: drag and drop from Finder or a browser, paste (⌘V image and prompt text), File › Import (⌘O). A Why popover after saving.
 5. Mac Share Extension (Safari and other apps' Share menu). Needs your Team ID for the App Group.
 6. On-device analysis: OCR, feature print, colors
@@ -36,6 +36,32 @@ its own shell (window layout, navigation) and its own capture methods.
 9. Search: text search plus filter chips (origin, type, color), and "More like this"
 10. Boards: create, rename, add and remove References. A Reference can be on many Boards.
 11. Inbox: saves from the last 7 days that haven't been opened
+
+## Phase 1b — Canvas (idea map)
+
+A second way to see the same References: Ideas as circles, cards around them, links between
+anything. Design: the "Motiff Canvas" design canvas (Map, anatomy, palette, detail, Outline,
+Graph, iPhone). Code lives in `Motiff/Canvas/`.
+
+| Area | Choice | Why |
+|---|---|---|
+| Belongs to | `CanvasNode.parent` only; `CanvasLink` stores "relates to" | One record per edge, so hierarchy and lines can't drift |
+| Prompt cards | `NodeKind.prompt`: a Reference drawn prompt first | The same Reference can be a picture on one Canvas and a prompt on another |
+| No-media prompts | Text/Code prompts keep an empty `mediaFilename` and draw a typographic cover | Never blank; the cover takes the category color, which is per Canvas |
+| Category colors | A fixed set of ten swatches | No category can land on focus red; each reads on dark and light |
+| Changes | Only through `CanvasGraph` | The rules (no cycles, one link per pair, children move up on delete) live in one place |
+| Tests | `MotiffTests`, model layer only, no host app | Run in CI on every push |
+
+1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
+2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom
+3. Create and edit: root Idea, Tab / ⌘Return, drag to move, auto-placement, undo
+4. Linking: handles, drag to link, link types, labels, selection highlight
+5. Detail view from the Map, Esc back, sibling navigation, Connections
+6. Drag and paste onto the Map (shares capture with step 4 above)
+7. Category legend and filters; purpose filter in the Canvas and the Library
+8. Outline view, Graph view, cross-canvas graph
+9. ⌘K palette, search, minimap, semantic zoom, performance pass
+10. iPhone: Canvases tab, Outline first, touch Map
 
 ## Phase 2 — iPhone
 

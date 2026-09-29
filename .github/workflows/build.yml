@@ -82,7 +82,9 @@ jobs:
 
   mac:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -105,6 +107,17 @@ jobs:
             | tee build-mac.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build-mac.log
 
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Motiff.xcodeproj \
+            -scheme MotiffTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            | tee test-mac.log | grep -E "error:|Test Case .*(passed|failed)|Executed|TEST (SUCCEEDED|FAILED)" || true
+          grep -q "TEST SUCCEEDED" test-mac.log
+
       - name: Launch
         run: |
           APP=build/Build/Products/Debug/Motiff.app
@@ -125,6 +138,42 @@ jobs:
           echo "Seeded media files: $COUNT"
           [ "$COUNT" -ge 12 ]
           echo "Seed data present"
+          # The example Canvas: 13 nodes, 1 link, 4 categories.
+          STORE="$HOME/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/default.store"
+          CANVASES=$(sqlite3 "$STORE" "SELECT COUNT(*) FROM ZCANVAS")
+          NODES=$(sqlite3 "$STORE" "SELECT COUNT(*) FROM ZCANVASNODE")
+          LINKS=$(sqlite3 "$STORE" "SELECT COUNT(*) FROM ZCANVASLINK")
+          CATEGORIES=$(sqlite3 "$STORE" "SELECT COUNT(*) FROM ZCANVASCATEGORY")
+          echo "Canvases: $CANVASES, nodes: $NODES, links: $LINKS, categories: $CATEGORIES"
+          [ "$CANVASES" -ge 1 ] && [ "$NODES" -ge 13 ] && [ "$LINKS" -ge 1 ] && [ "$CATEGORIES" -ge 4 ]
+          echo "Example canvas present"
+
+      # One window snapshot per route. Add routes here as screens arrive.
+      - name: Snapshots
+        run: |
+          .claude/skills/run-motiff/snapshot-mac.sh build/Build/Products/Debug/Motiff.app snapshots \
+            library \
+            "canvas:Product photography look"
+
+      # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with
+      # GITHUB_TOKEN don't trigger workflows.
+      - name: Publish snapshots
+        if: always() && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(ls -A snapshots 2>/dev/null)" ]; then echo "No snapshots"; exit 0; fi
+          BRANCH="ci-snapshots/$GITHUB_REF_NAME"
+          cd snapshots
+          printf 'Run %s\nCommit %s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > RUN.txt
+          git init -q -b snapshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Snapshots for $GITHUB_SHA"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          echo "Pushed to $BRANCH"
 
       - name: Upload screenshot
         if: always()
@@ -134,4 +183,6 @@ jobs:
           path: |
             launch-mac.png
             build-mac.log
+            test-mac.log
+            snapshots/
           if-no-files-found: ignore
