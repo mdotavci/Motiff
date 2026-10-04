@@ -35,6 +35,9 @@ final class CanvasController {
 
     @ObservationIgnored private var nodesByID: [UUID: CanvasNode] = [:]
     @ObservationIgnored private var needsFit: Bool
+    /// True while the camera is still the automatic fit, so a resize (the window settling,
+    /// the inspector opening) fits again. Any pan or zoom by the user ends it.
+    @ObservationIgnored private var isAutoFitted = false
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored var eventMonitor: Any?
 
@@ -100,18 +103,21 @@ final class CanvasController {
 
     func setViewSize(_ size: CGSize) {
         viewSize = size
+        if isAutoFitted { needsFit = true }
         fitIfNeeded()
     }
 
     // MARK: Moving the camera
 
     func pan(by screenDelta: CGSize) {
+        isAutoFitted = false
         move(to: camera.panned(by: screenDelta))
     }
 
     /// Zooms around `anchor` (a view point), or around the middle of the view.
     func zoom(by factor: CGFloat, at anchor: CGPoint? = nil) {
         let point = anchor ?? CGPoint(x: viewSize.width / 2, y: viewSize.height / 2)
+        isAutoFitted = false
         move(to: camera.zoomed(by: factor, anchor: point, in: viewSize))
     }
 
@@ -123,10 +129,16 @@ final class CanvasController {
         move(to: .fitting(snapshot.bounds, in: viewSize))
     }
 
+    /// Smaller than this, the view is still being laid out; fitting to it would zoom all the way out.
+    private static let minimumFitSize: CGFloat = 200
+
     private func fitIfNeeded() {
-        guard needsFit, viewSize.width > 0, !snapshot.nodes.isEmpty else { return }
+        guard needsFit, viewSize.width >= Self.minimumFitSize, viewSize.height >= Self.minimumFitSize,
+              !snapshot.nodes.isEmpty
+        else { return }
         needsFit = false
         fitToContent()
+        isAutoFitted = true
     }
 
     /// Pans just enough to bring a node fully into view.
@@ -135,6 +147,7 @@ final class CanvasController {
         let inset = 40 / camera.zoom
         let visible = camera.visibleRect(in: viewSize).insetBy(dx: inset, dy: inset)
         guard !visible.contains(rect) else { return }
+        isAutoFitted = false
         var center = camera.center
         if rect.minX < visible.minX {
             center.x -= visible.minX - rect.minX
