@@ -98,4 +98,14 @@ final class CanvasMapTests: XCTestCase {
         let root = try XCTUnwrap(canvas.roots.first)
         XCTAssertEqual(snapshot.node(root.id)?.rect.size, CGSize(width: 128, height: 128))
     }
+
+    func testDraggingShiftsOnlyTheDraggedNodes() {
+        let a = CanvasSnapshot.Node(id: UUID(), kind: .note, rect: CGRect(x: 0, y: 0, width: 10, height: 10), colorHex: nil, title: "a")
+        let b = CanvasSnapshot.Node(id: UUID(), kind: .idea, rect: CGRect(x: 50, y: 0, width: 10, height: 10), colorHex: nil, title: "b")
+        let snapshot = CanvasSnapshot(nodes: [a, b], edges: [])
+        let moved = snapshot.moving([a.id], by: CGSize(width: 5, height: -5))
+        XCTAssertEqual(moved.node(a.id)?.rect.origin, CGPoint(x: 5, y: -5))
+        XCTAssertEqual(moved.node(b.id)?.rect, b.rect)
+        XCTAssertEqual(snapshot.moving([], by: CGSize(width: 5, height: 5)), snapshot)
+    }
 }

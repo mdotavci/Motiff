@@ -9,6 +9,9 @@ import AppKit
 ///
 ///     -MotiffOpen library | inbox | boards | canvas:<title>
 ///     -MotiffSnapshot <name>     writes Snapshots/<name>.png in the library folder (Mac)
+///     -MotiffSelect <title>      on a Canvas, selects the node with that title
+///     -MotiffInspector YES       on a Canvas, opens the inspector
+///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
 enum DebugLaunchRoute {
@@ -18,6 +21,18 @@ enum DebugLaunchRoute {
 
     static var snapshotName: String? {
         UserDefaults.standard.string(forKey: "MotiffSnapshot")
+    }
+
+    static var selectTitle: String? {
+        UserDefaults.standard.string(forKey: "MotiffSelect")
+    }
+
+    static var showsInspector: Bool {
+        UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var showsShortcuts: Bool {
+        UserDefaults.standard.bool(forKey: "MotiffShortcuts")
     }
 
     /// Time for the opened screen to load its thumbnails before the snapshot.
@@ -42,12 +57,13 @@ enum DebugLaunchRoute {
         }
     }
 
-    /// Draws the frontmost window, title bar and toolbar included, into a PNG.
-    /// Uses the view hierarchy, so it needs no screen-recording permission.
+    /// Draws the frontmost window, title bar and toolbar included, into a PNG; or the sheet
+    /// in front of it, if one is open. Uses the view hierarchy, so it needs no
+    /// screen-recording permission.
     @MainActor
     static func writeSnapshot(named name: String) {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
-              let content = window.contentView
+        guard let main = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.sheetParent == nil }),
+              let content = (main.attachedSheet ?? main).contentView
         else { return }
         let view = content.superview ?? content
         let bounds = view.bounds

@@ -86,6 +86,110 @@ enum CanvasGraph {
         return node
     }
 
+    /// Adds a node that belongs to `parent`, on the first free spot around it
+    /// (`CanvasLayout.radialSlot`), fanning out on the side away from the parent's own parent.
+    @discardableResult
+    static func addChild(
+        _ kind: NodeKind,
+        under parent: CanvasNode,
+        title: String? = nil,
+        body: String? = nil,
+        in context: ModelContext
+    ) -> CanvasNode? {
+        guard let canvas = parent.canvas else { return nil }
+        let node = addNode(kind, to: canvas, parent: parent, at: parent.position, title: title, body: body, in: context)
+        node.position = freeSpot(for: node, around: parent)
+        return node
+    }
+
+    /// Where `node` fits around `parent` without covering anything else on the Canvas.
+    static func freeSpot(for node: CanvasNode, around parent: CanvasNode) -> CGPoint {
+        let occupied = (parent.canvas?.nodes ?? []).filter { $0 !== node }.map(rect(of:))
+        let parentSize = CanvasLayout.size(of: parent)
+        var away: CGFloat = 0
+        if let grandparent = parent.parent, grandparent.position != parent.position {
+            away = CGFloat(atan2(parent.y - grandparent.y, parent.x - grandparent.x))
+        }
+        return CanvasLayout.radialSlot(
+            around: parent.position,
+            radius: max(parentSize.width, parentSize.height) / 2,
+            size: CanvasLayout.size(of: node),
+            avoiding: occupied,
+            startAngle: away
+        )
+    }
+
+    /// The node's frame in canvas points.
+    static func rect(of node: CanvasNode) -> CGRect {
+        let size = CanvasLayout.size(of: node)
+        return CGRect(x: node.x - size.width / 2, y: node.y - size.height / 2, width: size.width, height: size.height)
+    }
+
+    /// Moves nodes by the same distance, in canvas points. One call, one undo step.
+    static func move(_ nodes: [CanvasNode], by offset: CGSize) {
+        guard offset != .zero, !nodes.isEmpty else { return }
+        for node in nodes {
+            node.x += Double(offset.width)
+            node.y += Double(offset.height)
+        }
+        touch(nodes.first?.canvas)
+    }
+
+    /// Changes a node's own content (title, text, URL) and marks the Canvas changed.
+    static func edit(_ node: CanvasNode, _ change: (CanvasNode) -> Void) {
+        change(node)
+        touch(node.canvas)
+    }
+
+    /// Names an Idea. A Canvas that has no title yet takes its root Idea's.
+    static func rename(_ node: CanvasNode, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        node.title = trimmed.isEmpty ? nil : trimmed
+        if node.isRoot, let canvas = node.canvas, canvas.title.isEmpty, !trimmed.isEmpty {
+            canvas.title = trimmed
+        }
+        touch(node.canvas)
+    }
+
+    /// Gives nodes a category. Everything under an Idea that had the Idea's old category
+    /// follows it; anything colored differently on purpose keeps its own.
+    static func setCategory(_ nodes: [CanvasNode], to category: CanvasCategory?) {
+        for node in nodes {
+            let old = node.category
+            if node.isIdea {
+                for item in node.descendants where item.category === old {
+                    item.category = category
+                }
+            }
+            node.category = category
+        }
+        touch(nodes.first?.canvas)
+    }
+
+    /// Deletes what's selected. Root Ideas stay: delete the Canvas instead.
+    /// - Parameter branch: also delete everything that belongs to each node (⌘⌫);
+    ///   otherwise children move up to the deleted node's parent (⌫).
+    /// - Returns: how many nodes were deleted.
+    @discardableResult
+    static func delete(_ nodes: [CanvasNode], branch: Bool, in context: ModelContext) -> Int {
+        var targets = nodes.filter { !$0.isRoot }
+        if branch {
+            // A node inside another selected branch goes with that branch.
+            targets = targets.filter { node in !targets.contains { node.isDescendant(of: $0) } }
+        }
+        var count = 0
+        for node in targets {
+            if branch {
+                count += node.descendants.count + 1
+                deleteBranch(node, in: context)
+            } else {
+                count += 1
+                deleteNode(node, in: context)
+            }
+        }
+        return count
+    }
+
     /// Deletes one node and its links. Its children move up to its parent, or become loose.
     static func deleteNode(_ node: CanvasNode, in context: ModelContext) {
         let canvas = node.canvas

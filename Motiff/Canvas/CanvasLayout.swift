@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// How big things are on a Canvas at 100% zoom, from the design's anatomy board.
 enum CanvasLayout {
@@ -55,5 +56,56 @@ enum CanvasLayout {
             heightOverWidth: node.reference?.displayAspectRatio ?? 1.25,
             override: override
         )
+    }
+}
+
+// MARK: - Placing new nodes
+
+extension CanvasLayout {
+    /// Room kept between a new node and anything already there.
+    static let slotGap: CGFloat = 24
+    static let maxRings = 12
+
+    /// Where a new node of `size` goes around a node at `center` whose outline reaches `radius`:
+    /// the first free spot on rings around it, starting at `startAngle` (radians, 0 is to the
+    /// right) and fanning out to either side, one ring further out when a ring is full.
+    /// Nothing already placed moves, so positions the user dragged to stay put.
+    static func radialSlot(
+        around center: CGPoint,
+        radius: CGFloat,
+        size: CGSize,
+        avoiding occupied: [CGRect],
+        startAngle: CGFloat = 0,
+        gap: CGFloat = slotGap
+    ) -> CGPoint {
+        func point(_ distance: CGFloat, _ angle: CGFloat) -> CGPoint {
+            CGPoint(x: center.x + distance * cos(angle), y: center.y + distance * sin(angle))
+        }
+        let reach = (size.width * size.width + size.height * size.height).squareRoot() / 2
+        let firstDistance = radius + gap * 2 + reach
+        var distance = firstDistance
+        for _ in 0..<maxRings {
+            // Half a node apart along the ring, so neighbors can pack in.
+            let spacing = (min(size.width, size.height) + gap) / 2
+            let steps = max(12, Int((2 * .pi * distance) / spacing))
+            let step = 2 * .pi / CGFloat(steps)
+            for index in 0..<steps {
+                // 0, +1, −1, +2, −2, …
+                let side: CGFloat = index.isMultiple(of: 2) ? -1 : 1
+                let angle = startAngle + side * CGFloat((index + 1) / 2) * step
+                let candidate = point(distance, angle)
+                let room = CGRect(
+                    x: candidate.x - size.width / 2 - gap / 2,
+                    y: candidate.y - size.height / 2 - gap / 2,
+                    width: size.width + gap,
+                    height: size.height + gap
+                )
+                if !occupied.contains(where: { $0.intersects(room) }) {
+                    return candidate
+                }
+            }
+            distance += max(size.width, size.height) * 0.75 + gap
+        }
+        return point(firstDistance, startAngle)
     }
 }

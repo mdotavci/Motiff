@@ -31,21 +31,21 @@ struct LibraryCommands: Commands {
     var body: some Commands {
         CommandGroup(before: .sidebar) {
             if let canvasZoom {
-                Button("Zoom In") { canvasZoom.zoomIn() }
-                    .keyboardShortcut("+")
-                Button("Zoom Out") { canvasZoom.zoomOut() }
-                    .keyboardShortcut("-")
-                Button("Fit to Screen") { canvasZoom.fit() }
-                    .keyboardShortcut("0")
+                Button(ShortcutCatalog.zoomIn.title) { canvasZoom.zoomIn() }
+                    .shortcut(ShortcutCatalog.zoomIn)
+                Button(ShortcutCatalog.zoomOut.title) { canvasZoom.zoomOut() }
+                    .shortcut(ShortcutCatalog.zoomOut)
+                Button(ShortcutCatalog.fit.title) { canvasZoom.fit() }
+                    .shortcut(ShortcutCatalog.fit)
             } else {
-                Button("Larger Thumbnails") { level = LibraryDensity.clamped(level + 1) }
-                    .keyboardShortcut("+")
+                Button(ShortcutCatalog.largerThumbnails.title) { level = LibraryDensity.clamped(level + 1) }
+                    .shortcut(ShortcutCatalog.largerThumbnails)
                     .disabled(!LibraryDensity.canGrow(level))
-                Button("Smaller Thumbnails") { level = LibraryDensity.clamped(level - 1) }
-                    .keyboardShortcut("-")
+                Button(ShortcutCatalog.smallerThumbnails.title) { level = LibraryDensity.clamped(level - 1) }
+                    .shortcut(ShortcutCatalog.smallerThumbnails)
                     .disabled(!LibraryDensity.canShrink(level))
-                Button("Default Thumbnail Size") { level = LibraryDensity.defaultLevel }
-                    .keyboardShortcut("0")
+                Button(ShortcutCatalog.defaultThumbnails.title) { level = LibraryDensity.defaultLevel }
+                    .shortcut(ShortcutCatalog.defaultThumbnails)
             }
             Divider()
         }

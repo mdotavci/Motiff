@@ -41,6 +41,12 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
 - `-MotiffOpen library|inbox|boards|canvas:<title>` selects that sidebar item.
 - `-MotiffSnapshot <name>` writes `Snapshots/<name>.png` into the library folder
   (`~/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/Motiff/`).
+  If a sheet is open, the sheet is what's drawn.
+- `-MotiffSelect <title>` selects that node on the opened Canvas; `-MotiffInspector YES` opens
+  the inspector; `-MotiffShortcuts YES` opens the keyboard shortcuts sheet.
+
+In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:
+`"canvas:Product photography look|select=Light|inspector"`, `"library|shortcuts"`.
 
 `snapshot-mac.sh <Motiff.app> <out-dir> <route>...` launches the app once per route with both and
 collects the PNGs. CI calls it after the build.

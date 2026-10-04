@@ -38,12 +38,14 @@ enum SidebarSelection: Hashable {
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.undoManager) private var undoManager
     @Query(sort: \Canvas.createdAt) private var canvases: [Canvas]
 
     @State private var selection: SidebarSelection? = .library
     @State private var renaming: Canvas?
     @State private var draftTitle = ""
     @State private var pendingDelete: Canvas?
+    @State private var showsShortcuts = false
 
     var body: some View {
         NavigationSplitView {
@@ -72,7 +74,7 @@ struct RootView: View {
                         Button("New Canvas", systemImage: "plus", action: newCanvas)
                             .labelStyle(.iconOnly)
                             .buttonStyle(.borderless)
-                            .help("New Canvas (⌘N)")
+                            .help("New Canvas (\(ShortcutCatalog.newCanvas.keys))")
                     }
                 }
             }
@@ -82,6 +84,14 @@ struct RootView: View {
         }
         .tint(.primary)
         .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas))
+        .focusedSceneValue(\.showShortcuts, ShortcutsAction { showsShortcuts = true })
+        .sheet(isPresented: $showsShortcuts) {
+            ShortcutHelpView()
+        }
+        // Edit › Undo / Redo reach SwiftData through the window's undo manager.
+        .onChange(of: undoManager.map(ObjectIdentifier.init), initial: true) {
+            context.undoManager = undoManager
+        }
         .alert("Rename Canvas", isPresented: isRenaming) {
             TextField("Title", text: $draftTitle)
             Button("Rename") {
@@ -152,6 +162,7 @@ struct RootView: View {
         try? await Task.sleep(for: .seconds(1.5))
         let all = (try? context.fetch(FetchDescriptor<Canvas>())) ?? []
         selection = DebugLaunchRoute.selection(for: route, canvases: all)
+        showsShortcuts = DebugLaunchRoute.showsShortcuts
         if let name = DebugLaunchRoute.snapshotName {
             try? await Task.sleep(for: .seconds(DebugLaunchRoute.settleSeconds))
             DebugLaunchRoute.writeSnapshot(named: name)

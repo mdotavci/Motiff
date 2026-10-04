@@ -153,7 +153,9 @@ jobs:
         run: |
           .claude/skills/run-motiff/snapshot-mac.sh build/Build/Products/Debug/Motiff.app snapshots \
             library \
-            "canvas:Product photography look"
+            "canvas:Product photography look" \
+            "canvas:Product photography look|select=Light|inspector" \
+            "library|shortcuts"
 
       # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with
       # GITHUB_TOKEN don't trigger workflows.

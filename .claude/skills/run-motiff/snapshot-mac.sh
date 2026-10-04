@@ -2,7 +2,9 @@
 # Opens the Mac app once per route and saves a PNG of its window for each.
 #
 #   snapshot-mac.sh <path/to/Motiff.app> <out-dir> <route>...
-#   route: library | inbox | boards | canvas:<title>
+#   route: library | inbox | boards | canvas:<title>, then optional |-separated extras:
+#          select=<node title>  inspector  shortcuts
+#   e.g.   "canvas:Product photography look|select=Light|inspector"
 #
 # The app draws its own window into Snapshots/<name>.png (-MotiffSnapshot), so this needs no
 # screen-recording permission. Debug builds only: the launch arguments are compiled out of Release.
@@ -24,7 +26,19 @@ for route in "$@"; do
   pkill -x Motiff 2>/dev/null || true
   sleep 1
   rm -f "$SNAPS/$name.png"
-  open -n "$APP" --args -MotiffOpen "$route" -MotiffSnapshot "$name"
+  IFS='|' read -r -a parts <<< "$route"
+  args=(-MotiffOpen "${parts[0]}" -MotiffSnapshot "$name")
+  # macOS bash 3.2: an empty array can't be expanded under `set -u`, so index instead.
+  for ((p = 1; p < ${#parts[@]}; p++)); do
+    extra="${parts[$p]}"
+    case "$extra" in
+      select=*) args+=(-MotiffSelect "${extra#select=}") ;;
+      inspector) args+=(-MotiffInspector YES) ;;
+      shortcuts) args+=(-MotiffShortcuts YES) ;;
+      *) echo "Unknown extra: $extra" >&2 ;;
+    esac
+  done
+  open -n "$APP" --args "${args[@]}"
 
   for _ in $(seq 1 30); do
     [ -f "$SNAPS/$name.png" ] && break

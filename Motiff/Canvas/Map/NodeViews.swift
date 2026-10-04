@@ -6,12 +6,14 @@ struct NodeView: View {
     let size: CGSize
     /// The Map's zoom, so thumbnails decode at the size they're shown.
     let zoom: CGFloat
+    /// Set while the node's text is being typed into on the Map.
+    var editor: CanvasController?
 
     var body: some View {
         if node.isIdea {
-            IdeaNodeView(node: node, diameter: size.width)
+            IdeaNodeView(node: node, diameter: size.width, editor: editor)
         } else {
-            CardView(node: node, size: size, zoom: zoom)
+            CardView(node: node, size: size, zoom: zoom, editor: editor)
         }
     }
 }
@@ -20,6 +22,7 @@ struct NodeView: View {
 struct IdeaNodeView: View {
     let node: CanvasNode
     let diameter: CGFloat
+    var editor: CanvasController?
 
     var body: some View {
         let hex = node.category?.hexColor
@@ -31,13 +34,19 @@ struct IdeaNodeView: View {
                 }
             }
             .overlay {
-                Text(node.displayTitle)
-                    .font(.system(size: fontSize, weight: .semibold))
-                    .foregroundStyle(hex?.textColor ?? Color.primary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.7)
-                    .padding(diameter * 0.14)
+                Group {
+                    if let editor {
+                        InlineEditor(controller: editor, nodeID: node.id, prompt: "Name this idea", alignment: .center)
+                    } else {
+                        Text(node.displayTitle)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(hex?.textColor ?? Color.primary)
+                .multilineTextAlignment(.center)
+                .padding(diameter * 0.14)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Idea: \(node.displayTitle)")
@@ -57,6 +66,7 @@ struct CardView: View {
     let node: CanvasNode
     let size: CGSize
     let zoom: CGFloat
+    var editor: CanvasController?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,9 +101,15 @@ struct CardView: View {
                 MissingReference()
             }
         case .note:
-            NoteCardContent(text: node.body ?? "")
+            if let editor {
+                InlineEditor(controller: editor, nodeID: node.id, prompt: "Note", axis: .vertical)
+                    .font(.system(size: 14))
+                    .padding(12)
+            } else {
+                NoteCardContent(text: node.body ?? "")
+            }
         case .link:
-            LinkCardContent(title: node.displayTitle, url: node.url)
+            LinkCardContent(title: node.displayTitle, url: node.url, editor: editor, nodeID: node.id)
         case .idea:
             EmptyView()
         }
@@ -214,6 +230,8 @@ private struct NoteCardContent: View {
 private struct LinkCardContent: View {
     let title: String
     let url: URL?
+    var editor: CanvasController?
+    let nodeID: UUID
 
     var body: some View {
         HStack(spacing: 10) {
@@ -223,9 +241,14 @@ private struct LinkCardContent: View {
                 .frame(width: 28, height: 28)
                 .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
+                Group {
+                    if let editor {
+                        InlineEditor(controller: editor, nodeID: nodeID, prompt: "Title")
+                    } else {
+                        Text(title).lineLimit(1)
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
                 if let host = url?.host() {
                     Text(host)
                         .font(.system(size: 11))
@@ -245,5 +268,44 @@ private struct MissingReference: View {
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .padding(12)
+    }
+}
+
+// MARK: - Typing on the Map
+
+/// A text field in place of a node's text while it's edited. Return or clicking elsewhere
+/// keeps the text, Esc puts it back. In a Note, ⌥Return starts a new line.
+struct InlineEditor: View {
+    @Bindable var controller: CanvasController
+    let nodeID: UUID
+    let prompt: String
+    var axis: Axis = .horizontal
+    var alignment: TextAlignment = .leading
+
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(prompt, text: $controller.editDraft, axis: axis)
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(alignment)
+            .focused($focused)
+            .onSubmit { controller.finishEditing(nodeID) }
+            .onKeyPress(keys: [.return], phases: .down) { press in
+                guard !press.modifiers.contains(.option) else { return .ignored }
+                controller.finishEditing(nodeID)
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                controller.finishEditing(nodeID, commit: false)
+                return .handled
+            }
+            .onChange(of: focused) { wasFocused, isFocused in
+                if wasFocused, !isFocused { controller.finishEditing(nodeID) }
+            }
+            .task {
+                // Focus can't move while the field is still being inserted; wait a beat.
+                try? await Task.sleep(for: .milliseconds(50))
+                focused = true
+            }
     }
 }

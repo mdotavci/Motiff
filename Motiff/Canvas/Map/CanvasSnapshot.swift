@@ -58,7 +58,7 @@ struct CanvasSnapshot: Equatable, Sendable {
     init(canvas: Canvas) {
         var nodes: [Node] = []
         var edges: [Edge] = []
-        for node in canvas.nodes {
+        for node in canvas.nodes where !node.isDeleted {
             let size = CanvasLayout.size(of: node)
             nodes.append(Node(
                 id: node.id,
@@ -67,15 +67,31 @@ struct CanvasSnapshot: Equatable, Sendable {
                 colorHex: node.category?.colorHex,
                 title: node.displayTitle
             ))
-            if let parent = node.parent {
+            if let parent = node.parent, !parent.isDeleted {
                 edges.append(Edge(id: "parent-\(node.id)", from: parent.id, to: node.id, type: .belongsTo, label: node.parentLabel))
             }
         }
         for link in canvas.links {
-            guard let from = link.from, let to = link.to else { continue }
+            guard !link.isDeleted, let from = link.from, let to = link.to else { continue }
             edges.append(Edge(id: link.id.uuidString, from: from.id, to: to.id, type: .relatesTo, label: link.label))
         }
         self.init(nodes: nodes, edges: edges)
+    }
+
+    /// The same Canvas with some nodes shifted, for drawing a drag before it's committed.
+    func moving(_ ids: Set<UUID>, by offset: CGSize) -> CanvasSnapshot {
+        guard !ids.isEmpty, offset != .zero else { return self }
+        let moved = nodes.map { node in
+            guard ids.contains(node.id) else { return node }
+            return Node(
+                id: node.id,
+                kind: node.kind,
+                rect: node.rect.offsetBy(dx: offset.width, dy: offset.height),
+                colorHex: node.colorHex,
+                title: node.title
+            )
+        }
+        return CanvasSnapshot(nodes: moved, edges: edges)
     }
 
     func node(_ id: UUID) -> Node? {
