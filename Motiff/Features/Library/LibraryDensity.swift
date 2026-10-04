@@ -22,20 +22,31 @@ enum LibraryDensity {
 }
 
 #if os(macOS)
-/// View menu: Larger / Smaller / Default Thumbnails.
+/// View menu: Larger / Smaller / Default Thumbnails. With a Canvas open, the same three
+/// shortcuts zoom the Map instead.
 struct LibraryCommands: Commands {
     @AppStorage(LibraryDensity.storageKey) private var level = LibraryDensity.defaultLevel
+    @FocusedValue(\.canvasZoom) private var canvasZoom
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
-            Button("Larger Thumbnails") { level = LibraryDensity.clamped(level + 1) }
-                .keyboardShortcut("+")
-                .disabled(!LibraryDensity.canGrow(level))
-            Button("Smaller Thumbnails") { level = LibraryDensity.clamped(level - 1) }
-                .keyboardShortcut("-")
-                .disabled(!LibraryDensity.canShrink(level))
-            Button("Default Thumbnail Size") { level = LibraryDensity.defaultLevel }
-                .keyboardShortcut("0")
+            if let canvasZoom {
+                Button("Zoom In") { canvasZoom.zoomIn() }
+                    .keyboardShortcut("+")
+                Button("Zoom Out") { canvasZoom.zoomOut() }
+                    .keyboardShortcut("-")
+                Button("Fit to Screen") { canvasZoom.fit() }
+                    .keyboardShortcut("0")
+            } else {
+                Button("Larger Thumbnails") { level = LibraryDensity.clamped(level + 1) }
+                    .keyboardShortcut("+")
+                    .disabled(!LibraryDensity.canGrow(level))
+                Button("Smaller Thumbnails") { level = LibraryDensity.clamped(level - 1) }
+                    .keyboardShortcut("-")
+                    .disabled(!LibraryDensity.canShrink(level))
+                Button("Default Thumbnail Size") { level = LibraryDensity.defaultLevel }
+                    .keyboardShortcut("0")
+            }
             Divider()
         }
     }

@@ -67,6 +67,9 @@ targets:
       - Motiff/Model
       - Motiff/Canvas/Model
       - Motiff/Canvas/CanvasGraph.swift
+      - Motiff/Canvas/CanvasLayout.swift
+      - Motiff/Canvas/Map/CanvasCamera.swift
+      - Motiff/Canvas/Map/CanvasSnapshot.swift
       - Motiff/Storage
       - Shared
     settings:

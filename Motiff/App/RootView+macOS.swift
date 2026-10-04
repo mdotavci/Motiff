@@ -114,7 +114,8 @@ struct RootView: View {
             BoardsView()
         case .canvas(let id):
             if let canvas = canvases.first(where: { $0.id == id }) {
-                CanvasSummaryView(canvas: canvas)
+                CanvasMapView(canvas: canvas)
+                    .id(canvas.id)
             } else {
                 EmptyState(title: "Canvas", message: "This canvas was deleted.")
             }

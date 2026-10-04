@@ -53,7 +53,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Tests | `MotiffTests`, model layer only, no host app | Run in CI on every push |
 
 1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
-2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom
+2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom *(done)*
 3. Create and edit: root Idea, Tab / ⌘Return, drag to move, auto-placement, undo
 4. Linking: handles, drag to link, link types, labels, selection highlight
 5. Detail view from the Map, Esc back, sibling navigation, Connections
