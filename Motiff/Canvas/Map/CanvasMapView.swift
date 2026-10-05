@@ -258,7 +258,10 @@ struct CanvasMapView: View {
                 tool: controller.tool,
                 setTool: controller.setTool,
                 showsLibrary: controller.showsLibrary,
-                toggleLibrary: controller.toggleLibrary
+                toggleLibrary: controller.toggleLibrary,
+                hasWords: controller.selectionFontSize != nil,
+                biggerText: { controller.stepFontSize(by: 1) },
+                smallerText: { controller.stepFontSize(by: -1) }
             ))
             #endif
             .navigationTitle(canvas.displayTitle)
@@ -443,6 +446,10 @@ struct CanvasMapView: View {
                 }
             }
 
+            if let id = resizableID, let geometry = shown.node(id) {
+                resizeHandles(for: geometry, camera: camera, size: size)
+            }
+
             if let anchor = selectionBarAnchor(in: shown, camera: camera, size: size) {
                 SelectionBar(controller: controller) { edge in
                     labelDraft = edge.label ?? ""
@@ -562,7 +569,7 @@ struct CanvasMapView: View {
         let isSelected = controller.selection.contains(node.id)
         // Text grows as it's typed; everything else keeps its size.
         let frame = isEditing && node.kind == .text
-            ? CanvasLayout.textBox(for: controller.editDraft, size: node.textSize)
+            ? CanvasLayout.textBox(for: controller.editDraft, fontSize: node.effectiveFontSize)
             : geometry.rect.size
         // While typing, clicks and drags belong to the text field.
         let mask: GestureMask = isEditing ? .subviews : .all
@@ -576,7 +583,8 @@ struct CanvasMapView: View {
                     size: frame,
                     zoom: camera.zoom,
                     editor: isEditing ? controller : nil,
-                    isPlaying: isHovered && controller.drag == nil
+                    isPlaying: isHovered && controller.drag == nil,
+                    line: geometry.isLine ? geometry.line : nil
                 )
             }
         }
@@ -634,6 +642,46 @@ struct CanvasMapView: View {
         if let selected = controller.selectedNode?.id, selected != controller.hoveredNodeID { ids.append(selected) }
         // Arrows and lines don't connect to things.
         return ids.filter { controller.node($0)?.isLine != true }
+    }
+
+    /// The one selected node, when it can be resized right now.
+    private var resizableID: UUID? {
+        guard controller.editingID == nil, controller.drag == nil, controller.connect == nil,
+              controller.tool == .select, !controller.isFarZoom
+        else { return nil }
+        return controller.selectedNode?.id
+    }
+
+    /// Squares on the selected node's corners to resize it (⇧ lets a picture stretch); for an
+    /// arrow or line, a circle on each end to move it. Same size at every zoom.
+    @ViewBuilder
+    private func resizeHandles(for geometry: CanvasSnapshot.Node, camera: CanvasCamera, size: CGSize) -> some View {
+        let id = geometry.id
+        if geometry.isLine {
+            ForEach([false, true], id: \.self) { isEnd in
+                ResizeHandle(isRound: true)
+                    .position(camera.screenPoint(isEnd ? geometry.lineEnd : geometry.lineStart, in: size))
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
+                            .onChanged { value in controller.lineEndChanged(id, isEnd: isEnd, to: value.location) }
+                            .onEnded { _ in controller.resizeEnded() }
+                    )
+                    .help("Drag to move this end")
+            }
+        } else {
+            ForEach(ResizeCorner.allCases, id: \.self) { corner in
+                ResizeHandle(isRound: false)
+                    .position(camera.screenPoint(corner.point(on: geometry.rect), in: size))
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
+                            .onChanged { value in
+                                controller.resizeChanged(id, corner: corner, to: value.location, freeAspect: Self.shiftIsDown)
+                            }
+                            .onEnded { _ in controller.resizeEnded() }
+                    )
+                    .help("Drag to resize. Pictures keep their shape; ⇧ lets them stretch.")
+            }
+        }
     }
 
     /// A small circle on a node's right edge. Drag it onto another node to make this one belong
@@ -990,6 +1038,31 @@ private struct SelectionRing: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// A corner (or an arrow's end) to drag: white with a focus-red edge. Bigger on iPhone for a finger.
+private struct ResizeHandle: View {
+    let isRound: Bool
+
+    #if os(iOS)
+    private static let side: CGFloat = 16
+    #else
+    private static let side: CGFloat = 9
+    #endif
+
+    var body: some View {
+        Group {
+            if isRound {
+                Circle().fill(Color.white).overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.5))
+            } else {
+                Rectangle().fill(Color.white).overlay(Rectangle().strokeBorder(Theme.accent, lineWidth: 1.5))
+            }
+        }
+        .frame(width: Self.side, height: Self.side)
+        .padding(6)
+        .contentShape(Rectangle())
+        .accessibilityLabel(isRound ? "Arrow end" : "Resize handle")
     }
 }
 

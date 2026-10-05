@@ -61,6 +61,16 @@ struct NodeMenu: View {
             }
         }
         colorMenu
+        if node.kind == .reference {
+            Button(node.isBare ? "Show as Card" : "Show as Picture", systemImage: node.isBare ? "rectangle.portrait.on.rectangle.portrait" : "photo") {
+                controller.setBare(!node.isBare, of: node.id)
+            }
+        }
+        if node.width != nil || node.fontSize != nil {
+            Button("Reset Size", systemImage: "arrow.uturn.backward") {
+                controller.resetSize(of: node.id)
+            }
+        }
         Button("Link To…", systemImage: "link") {
             controller.startLink(from: node.id)
         }

@@ -35,8 +35,10 @@ enum CanvasLayout {
         override: CGSize? = nil,
         text: String = "",
         textSize: TextSize = .medium,
+        fontSize: Double? = nil,
         shape: ShapeKind = .rectangle,
-        line: CGVector = .zero
+        line: CGVector = .zero,
+        bare: Bool = false
     ) -> CGSize {
         if kind == .shape, shape.isLine {
             return CGSize(width: abs(line.dx) + linePadding * 2, height: abs(line.dy) + linePadding * 2)
@@ -48,6 +50,7 @@ enum CanvasLayout {
             return CGSize(width: diameter, height: diameter)
         case .reference:
             let media = (referenceWidth * heightOverWidth).rounded()
+            if bare { return CGSize(width: referenceWidth, height: media) }
             return CGSize(width: referenceWidth, height: stripHeight + media + captionHeight)
         case .prompt:
             return promptSize
@@ -56,7 +59,7 @@ enum CanvasLayout {
         case .link:
             return linkSize
         case .text:
-            return textBox(for: text, size: textSize)
+            return textBox(for: text, fontSize: fontSize ?? textSize.fontSize)
         case .sticky:
             return stickySize
         case .shape:
@@ -75,18 +78,24 @@ enum CanvasLayout {
         }
     }
 
-    /// Text nodes wrap at this width.
+    /// Text nodes wrap at this width (wider for letters bigger than medium).
     static let textMaxWidth: CGFloat = 420
 
     /// Room for `text` at `size`, estimated from the letter count so it needs no fonts: each line
     /// as wide as its letters up to `textMaxWidth`, then wrapping. Empty text still gets a line.
     static func textBox(for text: String, size: TextSize) -> CGSize {
-        let font = CGFloat(size.fontSize)
+        textBox(for: text, fontSize: size.fontSize)
+    }
+
+    static func textBox(for text: String, fontSize: Double) -> CGSize {
+        let font = CGFloat(fontSize)
         let letter = font * 0.56
         let padding: CGFloat = 8
         let lines = text.isEmpty ? [""] : text.components(separatedBy: "\n")
         let longest = lines.map(\.count).max() ?? 0
-        let width = min(textMaxWidth, max(font * 4, CGFloat(longest) * letter + padding * 2)).rounded()
+        // Big letters wrap later, so a heading isn't a word per line.
+        let maxWidth = textMaxWidth * max(1, font / 20)
+        let width = min(maxWidth, max(font * 4, CGFloat(longest) * letter + padding * 2)).rounded()
         let perLine = max(1, Int((width - padding * 2) / letter))
         let rows = lines.reduce(0) { $0 + max(1, Int((Double($1.count) / Double(perLine)).rounded(.up))) }
         return CGSize(width: width, height: (CGFloat(rows) * font * 1.3 + padding * 2).rounded())
@@ -105,8 +114,10 @@ enum CanvasLayout {
             override: override,
             text: node.kind == .text ? node.body ?? "" : "",
             textSize: node.textSize,
+            fontSize: node.fontSize,
             shape: node.shape,
-            line: node.line
+            line: node.line,
+            bare: node.isBare
         )
     }
 }
@@ -202,5 +213,66 @@ extension CanvasLayout {
             top += (row.map(\.height).max() ?? 0) + gap
         }
         return centers
+    }
+}
+
+// MARK: - Resizing
+
+/// A corner of a selected node, dragged to resize it.
+enum ResizeCorner: CaseIterable, Sendable {
+    case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    var isLeading: Bool { self == .topLeading || self == .bottomLeading }
+    var isTop: Bool { self == .topLeading || self == .topTrailing }
+
+    /// Where it is on `rect`.
+    func point(on rect: CGRect) -> CGPoint {
+        CGPoint(x: isLeading ? rect.minX : rect.maxX, y: isTop ? rect.minY : rect.maxY)
+    }
+
+    var opposite: ResizeCorner {
+        switch self {
+        case .topLeading: .bottomTrailing
+        case .topTrailing: .bottomLeading
+        case .bottomLeading: .topTrailing
+        case .bottomTrailing: .topLeading
+        }
+    }
+}
+
+extension CanvasLayout {
+    /// Nothing gets smaller than this on a side.
+    static let minimumSide: CGFloat = 24
+
+    /// `rect` with `corner` dragged to `point`, the opposite corner staying put. With
+    /// `keepingAspect` it keeps its proportions, growing to whichever side was dragged further.
+    static func resized(_ rect: CGRect, corner: ResizeCorner, to point: CGPoint, keepingAspect: Bool) -> CGRect {
+        let anchor = corner.opposite.point(on: rect)
+        // Dragging past the anchor doesn't flip it; it stops at the smallest size.
+        let reachX = corner.isLeading ? anchor.x - point.x : point.x - anchor.x
+        let reachY = corner.isTop ? anchor.y - point.y : point.y - anchor.y
+        var width = max(reachX, minimumSide)
+        var height = max(reachY, minimumSide)
+        if keepingAspect, rect.width > 0, rect.height > 0 {
+            let scale = max(width / rect.width, height / rect.height, minimumSide / min(rect.width, rect.height))
+            width = rect.width * scale
+            height = rect.height * scale
+        }
+        return CGRect(
+            x: corner.isLeading ? anchor.x - width : anchor.x,
+            y: corner.isTop ? anchor.y - height : anchor.y,
+            width: width,
+            height: height
+        )
+    }
+
+    /// The box an arrow or line from `start` to `end` takes, with room for its heads.
+    static func lineRect(from start: CGPoint, to end: CGPoint) -> CGRect {
+        CGRect(
+            x: min(start.x, end.x) - linePadding,
+            y: min(start.y, end.y) - linePadding,
+            width: abs(end.x - start.x) + linePadding * 2,
+            height: abs(end.y - start.y) + linePadding * 2
+        )
     }
 }

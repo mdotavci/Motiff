@@ -10,6 +10,8 @@ struct NodeView: View {
     var editor: CanvasController?
     /// GIFs and videos play only while the pointer is over them.
     var isPlaying = false
+    /// An arrow's run while its end is being dragged; nil draws the stored one.
+    var line: CGVector?
 
     var body: some View {
         switch node.kind {
@@ -20,9 +22,11 @@ struct NodeView: View {
         case .sticky:
             StickyNodeView(node: node, editor: editor)
         case .shape where node.isLine:
-            LineNodeView(node: node, size: size)
+            LineNodeView(node: node, size: size, line: line ?? node.line)
         case .shape:
             ShapeNodeView(node: node, editor: editor)
+        case .reference where node.isBare:
+            BarePictureView(node: node, size: size, zoom: zoom, isPlaying: isPlaying)
         case .reference, .prompt, .note, .link:
             CardView(node: node, size: size, zoom: zoom, editor: editor, isPlaying: isPlaying)
         }
@@ -64,10 +68,11 @@ struct IdeaNodeView: View {
     }
 
     private var fontSize: CGFloat {
+        if let size = node.fontSize { return CGFloat(size) }
         switch diameter {
-        case 120...: 15
-        case 80...: 12
-        default: 10
+        case 120...: return 15
+        case 80...: return 12
+        default: return 10
         }
     }
 }
@@ -122,10 +127,10 @@ struct CardView: View {
             Group {
                 if let editor {
                     InlineEditor(controller: editor, nodeID: node.id, prompt: "Note", axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.system(size: node.effectiveFontSize))
                         .padding(12)
                 } else {
-                    NoteCardContent(text: node.body ?? "")
+                    NoteCardContent(text: node.body ?? "", fontSize: node.effectiveFontSize)
                 }
             }
             .foregroundStyle(Palette.text(on: node.effectiveColorHex, chosen: node.textColorHex))
@@ -134,6 +139,36 @@ struct CardView: View {
         case .idea, .text, .sticky, .shape:
             EmptyView()
         }
+    }
+}
+
+/// A picture on its own, as on a moodboard: just the image, rounded corners. Its origin and
+/// purpose show while the pointer is over it.
+struct BarePictureView: View {
+    let node: CanvasNode
+    let size: CGSize
+    let zoom: CGFloat
+    var isPlaying = false
+
+    var body: some View {
+        Group {
+            if let reference = node.reference {
+                CardMedia(reference: reference, colorHex: node.effectiveColorHex, pointSize: max(size.width, size.height) * zoom, isPlaying: isPlaying)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+                    .overlay(alignment: .topLeading) {
+                        if isPlaying { OriginBadge(origin: reference.origin).padding(6) }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if isPlaying, let purpose = reference.purpose { PurposeBadge(purpose: purpose).padding(6) }
+                    }
+            } else {
+                MissingReference()
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Picture: \(node.displayTitle)")
     }
 }
 
@@ -154,7 +189,7 @@ struct StickyNodeView: View {
                 Text(NoteCardContent.markdown(node.body ?? ""))
             }
         }
-        .font(.system(size: 16))
+        .font(.system(size: node.effectiveFontSize))
         .foregroundStyle(Palette.text(on: hex, chosen: node.textColorHex))
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -180,7 +215,9 @@ struct ShapeNodeView: View {
         shape
             .fill(Palette.fill(hex) ?? Theme.neutralIdea)
             .overlay {
-                shape.stroke(hex.map(Palette.ink) ?? Color.primary.opacity(0.35), lineWidth: 1.5)
+                if node.effectiveStrokeWidth > 0 {
+                    shape.stroke(hex.map(Palette.ink) ?? Color.primary.opacity(0.35), lineWidth: node.effectiveStrokeWidth)
+                }
             }
             .overlay {
                 Group {
@@ -191,7 +228,7 @@ struct ShapeNodeView: View {
                             .minimumScaleFactor(0.6)
                     }
                 }
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: node.effectiveFontSize, weight: .medium))
                 .foregroundStyle(Palette.text(on: hex, chosen: node.textColorHex))
                 .multilineTextAlignment(.center)
                 .padding(labelInsets)
@@ -216,22 +253,24 @@ struct ShapeNodeView: View {
 struct LineNodeView: View {
     let node: CanvasNode
     let size: CGSize
+    let line: CGVector
 
+    /// A new arrow's thickness.
     static let lineWidth: CGFloat = 2.5
 
     var body: some View {
-        let line = node.line
         let start = CGPoint(x: size.width / 2 - line.dx / 2, y: size.height / 2 - line.dy / 2)
         let end = CGPoint(x: size.width / 2 + line.dx / 2, y: size.height / 2 + line.dy / 2)
         let color = node.effectiveColorHex.map(Palette.ink) ?? Color.primary.opacity(0.75)
+        let width = CGFloat(node.effectiveStrokeWidth)
         ZStack {
             LineShape(start: start, end: end)
-                .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: width, lineCap: .round, dash: node.isDashed ? [width * 3, width * 2.5] : []))
             if node.shape == .arrow {
-                EdgeLayer.arrowhead(from: start, to: end, lineWidth: Self.lineWidth).fill(color)
+                EdgeLayer.arrowhead(from: start, to: end, lineWidth: width).fill(color)
             }
             if node.hasStartArrow {
-                EdgeLayer.arrowhead(from: end, to: start, lineWidth: Self.lineWidth).fill(color)
+                EdgeLayer.arrowhead(from: end, to: start, lineWidth: width).fill(color)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -247,7 +286,7 @@ struct TextNodeView: View {
     var editor: CanvasController?
 
     var body: some View {
-        let size = node.textSize
+        let size = node.effectiveFontSize
         Group {
             if let editor {
                 InlineEditor(controller: editor, nodeID: node.id, prompt: "Text", axis: .vertical)
@@ -255,7 +294,8 @@ struct TextNodeView: View {
                 Text(node.body ?? "")
             }
         }
-        .font(.system(size: size.fontSize, weight: size.isBold ? .bold : .regular))
+        // Big letters are headings: bold.
+        .font(.system(size: size, weight: size >= 32 ? .bold : .regular))
         .foregroundStyle(node.textColorHex.map(Palette.ink) ?? Color.primary)
         .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -367,10 +407,11 @@ private struct CardMedia: View {
 
 private struct NoteCardContent: View {
     let text: String
+    var fontSize: Double = 14
 
     var body: some View {
         Text(Self.markdown(text))
-            .font(.system(size: 14))
+            .font(.system(size: fontSize))
             .padding(12)
     }
 

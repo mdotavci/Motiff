@@ -58,8 +58,9 @@ enum CanvasGraph {
         canvas?.updatedAt = .now
     }
 
-    /// Puts References on a board as cards, loose, in a grid that starts at `topLeft` (or beside
-    /// what's already there). One that's already on the board isn't added again.
+    /// Puts References on a board, loose, in a grid that starts at `topLeft` (or beside what's
+    /// already there): pictures on their own, prompts as cards. One that's already on the board
+    /// isn't added again.
     @discardableResult
     static func addReferences(
         _ references: [Reference],
@@ -75,7 +76,10 @@ enum CanvasGraph {
         var made: [CanvasNode] = []
         for reference in references where !onBoard.contains(reference.id) {
             onBoard.insert(reference.id)
-            made.append(addNode(reference.hasMedia ? .reference : .prompt, to: canvas, at: start, reference: reference, in: context))
+            let node = addNode(reference.hasMedia ? .reference : .prompt, to: canvas, at: start, reference: reference, in: context)
+            // A picture on its own, as on a moodboard.
+            node.isBare = reference.hasMedia
+            made.append(node)
         }
         let centers = CanvasLayout.gridCenters(for: made.map(CanvasLayout.size(of:)), columns: columns, topLeft: start)
         for (node, center) in zip(made, centers) {
@@ -177,6 +181,89 @@ enum CanvasGraph {
         node.shape = arrow ? .arrow : .line
         node.line = CGVector(dx: end.x - start.x, dy: end.y - start.y)
         return node
+    }
+
+    /// A node made to fill `rect`. Ideas stay circles; Text scales its letters instead of
+    /// getting a fixed box, so it still grows as it's typed into.
+    static func resize(_ node: CanvasNode, to rect: CGRect) {
+        guard !node.isLine, rect.width > 0, rect.height > 0 else { return }
+        let old = CanvasLayout.size(of: node)
+        node.position = CGPoint(x: rect.midX, y: rect.midY)
+        switch node.kind {
+        case .text:
+            let scale = rect.height / max(old.height, 1)
+            node.fontSize = min(max((node.effectiveFontSize * Double(scale)).rounded(), 6), 400)
+            node.width = nil
+            node.height = nil
+        case .idea:
+            let diameter = Double(max(rect.width, rect.height))
+            node.width = diameter
+            node.height = diameter
+        default:
+            node.width = Double(rect.width)
+            node.height = Double(rect.height)
+        }
+        touch(node.canvas)
+    }
+
+    /// Back to the kind's own size.
+    static func resetSize(_ node: CanvasNode) {
+        node.width = nil
+        node.height = nil
+        if node.kind == .text { node.fontSize = nil }
+        touch(node.canvas)
+    }
+
+    /// Moves an arrow's or line's ends.
+    static func setLine(_ node: CanvasNode, from start: CGPoint, to end: CGPoint) {
+        guard node.isLine else { return }
+        node.position = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+        node.line = CGVector(dx: end.x - start.x, dy: end.y - start.y)
+        touch(node.canvas)
+    }
+
+    /// The letters' size of every node with words in `nodes`, kept between 6 and 400.
+    static func setFontSize(_ size: Double, of nodes: [CanvasNode]) {
+        let size = min(max(size, 6), 400)
+        for node in nodes where node.hasWords {
+            node.fontSize = size
+        }
+        touch(nodes.first?.canvas)
+    }
+
+    /// Arrows' and lines' thickness, or shapes' border (0 for none).
+    static func setStrokeWidth(_ width: Double, of nodes: [CanvasNode]) {
+        for node in nodes where node.kind == .shape {
+            node.strokeWidth = max(width, 0)
+        }
+        touch(nodes.first?.canvas)
+    }
+
+    static func setDashed(_ dashed: Bool, of nodes: [CanvasNode]) {
+        for node in nodes where node.isLine {
+            node.isDashed = dashed
+        }
+        touch(nodes.first?.canvas)
+    }
+
+    /// A link's look: how thick, dashed or solid, and its heads.
+    static func style(_ link: CanvasLink, width: Double? = nil, dashed: Bool? = nil, startArrow: Bool? = nil, endArrow: Bool? = nil) {
+        if let width { link.lineWidth = width }
+        if let dashed { link.isDashed = dashed }
+        if let startArrow { link.hasStartArrow = startArrow }
+        if let endArrow { link.hasArrow = endArrow }
+        touch(link.canvas)
+    }
+
+    /// A picture on its own, or in its card.
+    static func setBare(_ bare: Bool, of nodes: [CanvasNode]) {
+        for node in nodes where node.kind == .reference {
+            node.isBare = bare
+            // Its old size was the card's.
+            node.width = nil
+            node.height = nil
+        }
+        touch(nodes.first?.canvas)
     }
 
     /// A free arrow's or line's arrowheads. With none at the end it's a line, otherwise an arrow.

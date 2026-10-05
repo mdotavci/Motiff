@@ -42,6 +42,9 @@ struct CanvasEditActions {
     var setTool: @MainActor (CanvasTool) -> Void
     var showsLibrary: Bool
     var toggleLibrary: @MainActor () -> Void
+    var hasWords: Bool
+    var biggerText: @MainActor () -> Void
+    var smallerText: @MainActor () -> Void
 }
 
 /// File › Import… (⌘O) in the focused Library or Canvas.
@@ -135,6 +138,13 @@ struct CanvasCommands: Commands {
             Button(ShortcutCatalog.addSubIdea.title) { editing?.addSubIdea() }
                 .shortcut(ShortcutCatalog.addSubIdea)
                 .disabled(editing == nil)
+            Divider()
+            Button(ShortcutCatalog.biggerText.title) { editing?.biggerText() }
+                .shortcut(ShortcutCatalog.biggerText)
+                .disabled(editing?.hasWords != true)
+            Button(ShortcutCatalog.smallerText.title) { editing?.smallerText() }
+                .shortcut(ShortcutCatalog.smallerText)
+                .disabled(editing?.hasWords != true)
             Divider()
             Button(ShortcutCatalog.openDetail.title) { editing?.open() }
                 .disabled(editing?.canOpen != true)

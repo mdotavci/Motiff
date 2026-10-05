@@ -44,6 +44,14 @@ final class CanvasNode {
     var lineDY: Double?
     /// Arrows and lines: an arrowhead at the start too.
     var hasStartArrow: Bool = false
+    /// Letters' size in canvas points, for anything with words; nil is the kind's own size.
+    var fontSize: Double?
+    /// Arrows and lines: how thick; shapes: their border (0 for none). Nil is the kind's own.
+    var strokeWidth: Double?
+    /// Arrows and lines: drawn dashed.
+    var isDashed: Bool = false
+    /// A picture shown on its own, without the card around it.
+    var isBare: Bool = false
 
     // MARK: Look
 
@@ -112,7 +120,37 @@ extension CanvasNode {
 
     var textSize: TextSize {
         get { textSizeRaw.flatMap(TextSize.init(rawValue:)) ?? .medium }
-        set { textSizeRaw = newValue.rawValue }
+        set {
+            textSizeRaw = newValue.rawValue
+            fontSize = newValue.fontSize
+        }
+    }
+
+    /// Whether the node has words whose size can change.
+    var hasWords: Bool {
+        switch kind {
+        case .idea, .note, .text, .sticky: true
+        case .shape: !isLine
+        case .reference, .prompt, .link: false
+        }
+    }
+
+    /// The size its letters are drawn at: its own, or its kind's.
+    var effectiveFontSize: Double {
+        if let fontSize { return fontSize }
+        switch kind {
+        case .text: return textSize.fontSize
+        case .sticky: return 16
+        case .shape: return 15
+        case .note: return 14
+        case .idea: return isRoot ? 15 : ideaDepth <= 1 ? 12 : 10
+        case .reference, .prompt, .link: return 13
+        }
+    }
+
+    /// Arrows' and lines' thickness, or a shape's border.
+    var effectiveStrokeWidth: Double {
+        strokeWidth ?? (isLine ? 2.5 : 1.5)
     }
 
     var position: CGPoint {

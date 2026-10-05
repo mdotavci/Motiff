@@ -12,6 +12,12 @@ final class CanvasLink {
     var colorHex: String?
     /// An arrowhead at the `to` end.
     var hasArrow: Bool = true
+    /// An arrowhead at the `from` end too.
+    var hasStartArrow: Bool = false
+    /// How thick; nil is 2.
+    var lineWidth: Double?
+    /// Drawn dashed (the default for a link); false draws it solid.
+    var isDashed: Bool = true
 
     var canvas: Canvas?
     /// Inverse on `CanvasNode.outgoing`.

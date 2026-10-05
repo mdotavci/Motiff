@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Every line on the Map, drawn in one pass: belongs-to solid and thin, relates-to dashed and
-/// thicker, in their own color if they have one, with an arrowhead if they have one, labels in
-/// a pill at the middle. Line widths stay the same at every zoom.
+/// thicker unless styled otherwise, in their own color and thickness if they have one, with
+/// arrowheads if they have them, labels in a pill at the middle. Widths stay the same at every zoom.
 struct EdgeLayer: View {
     let snapshot: CanvasSnapshot
     let camera: CanvasCamera
@@ -32,17 +32,19 @@ struct EdgeLayer: View {
                 var lineContext = context
                 if dimmed { lineContext.opacity = 0.3 }
                 let color = lineColor(of: edge, hovered: hovered, selected: selected)
-                let width: CGFloat = switch edge.type {
-                case .belongsTo: hovered ? 2.5 : (edge.colorHex == nil ? 1 : 1.5)
-                case .relatesTo: hovered ? 3.5 : 2
-                }
+                let base: CGFloat = edge.width ?? (edge.type == .relatesTo ? 2 : (edge.colorHex == nil ? 1 : 1.5))
+                let width = hovered ? base + 1.5 : base
+                let dashed = edge.dashed ?? (edge.type == .relatesTo)
                 lineContext.stroke(
                     path,
                     with: .color(color),
-                    style: StrokeStyle(lineWidth: width, lineCap: .round, dash: edge.type == .relatesTo ? [6, 5] : [])
+                    style: StrokeStyle(lineWidth: width, lineCap: .round, dash: dashed ? [width * 3, width * 2.5] : [])
                 )
                 if edge.hasArrow {
                     lineContext.fill(Self.arrowhead(from: start, to: end, lineWidth: width), with: .color(color))
+                }
+                if edge.hasStartArrow {
+                    lineContext.fill(Self.arrowhead(from: end, to: start, lineWidth: width), with: .color(color))
                 }
 
                 if let label = edge.label, !label.isEmpty, camera.zoom >= Self.labelMinimumZoom {

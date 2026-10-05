@@ -66,6 +66,12 @@ struct CanvasSnapshot: Equatable, Sendable {
         var colorHex: String? = nil
         /// An arrowhead at the `to` end.
         var hasArrow = false
+        /// An arrowhead at the `from` end too.
+        var hasStartArrow = false
+        /// Its own thickness; nil is its type's.
+        var width: CGFloat? = nil
+        /// Its own dashing; nil is its type's (links dashed, belonging solid).
+        var dashed: Bool? = nil
     }
 
     /// Cards and shapes first, then Ideas, then arrows and lines, so circles draw over cards and
@@ -112,7 +118,8 @@ struct CanvasSnapshot: Equatable, Sendable {
             guard !link.isDeleted, let from = link.from, let to = link.to else { continue }
             edges.append(Edge(
                 id: link.id.uuidString, from: from.id, to: to.id, type: .relatesTo, label: link.label,
-                colorHex: link.colorHex, hasArrow: link.hasArrow
+                colorHex: link.colorHex, hasArrow: link.hasArrow, hasStartArrow: link.hasStartArrow,
+                width: link.lineWidth.map { CGFloat($0) }, dashed: link.isDashed
             ))
         }
         self.init(nodes: nodes, edges: edges)
@@ -128,6 +135,20 @@ struct CanvasSnapshot: Equatable, Sendable {
             return moved
         }
         return CanvasSnapshot(nodes: moved, edges: edges)
+    }
+
+    /// The same Canvas with one node in a new box (and an arrow with new ends), for drawing a
+    /// resize before it's committed.
+    func resizing(_ id: UUID, to rect: CGRect, line: CGVector? = nil) -> CanvasSnapshot {
+        guard index[id] != nil else { return self }
+        let resized = nodes.map { node in
+            guard node.id == id else { return node }
+            var resized = node
+            resized.rect = rect
+            if let line { resized.line = line }
+            return resized
+        }
+        return CanvasSnapshot(nodes: resized, edges: edges)
     }
 
     func node(_ id: UUID) -> Node? {

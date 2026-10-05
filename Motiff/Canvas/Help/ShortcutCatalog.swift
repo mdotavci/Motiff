@@ -214,6 +214,16 @@ enum ShortcutCatalog {
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
     static let selectLine = Shortcut("Select a Line", pointer: "Click it")
 
+    // MARK: Board: size and style
+
+    static let resize = Shortcut("Resize the Selection", pointer: "Drag a corner")
+    static let stretchPicture = Shortcut("Stretch a Picture", pointer: "⇧-drag a corner")
+    static let moveArrowEnd = Shortcut("Move an Arrow's End", pointer: "Drag the circle at that end")
+    static let biggerText = Shortcut("Bigger Text", "=", [.command, .option])
+    static let smallerText = Shortcut("Smaller Text", "-", [.command, .option])
+    static let lineStyle = Shortcut("Thickness, Dashes and Arrowheads", pointer: "The bar over a selected arrow or line")
+    static let pictureOrCard = Shortcut("Show a Picture Alone or in Its Card", pointer: "Right-click › Show as Card / Show as Picture")
+
     // MARK: Board: colors
 
     static let color = Shortcut("Color of the Selection or Line", "c")
@@ -250,6 +260,9 @@ enum ShortcutCatalog {
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,
         ]),
         ShortcutSection(title: "Board colors and lines", items: [color, selectLine, arrow, deleteLine]),
+        ShortcutSection(title: "Board size and style", items: [
+            resize, stretchPicture, moveArrowEnd, biggerText, smallerText, lineStyle, pictureOrCard,
+        ]),
     ]
 }
 

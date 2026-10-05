@@ -78,6 +78,32 @@ private struct NodeInspector: View {
                 }
             }
 
+            if !node.isLine, let geometry = controller.snapshot.node(node.id) {
+                DetailSection("Size") {
+                    HStack(spacing: Theme.unit) {
+                        SizeField(label: "W", value: geometry.rect.width) { width in
+                            controller.setSize(CGSize(width: width, height: geometry.rect.height), of: node.id)
+                        }
+                        SizeField(label: "H", value: geometry.rect.height) { height in
+                            controller.setSize(CGSize(width: geometry.rect.width, height: height), of: node.id)
+                        }
+                        if node.width != nil || node.fontSize != nil {
+                            Button("Reset") { controller.resetSize(of: node.id) }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            }
+
+            if node.hasWords {
+                DetailSection("Text Size") {
+                    SizeField(label: "pt", value: node.effectiveFontSize) { size in
+                        controller.select(node.id)
+                        controller.setFontSize(size)
+                    }
+                }
+            }
+
             ConnectionList(node: node) { other in
                 controller.focus(on: other.id)
             } detach: { child in
@@ -329,5 +355,24 @@ struct CommitField: View {
 
     private func save() {
         if draft != value { commit(draft) }
+    }
+}
+
+/// A number field for a size, kept when Return is pressed or it loses focus.
+private struct SizeField: View {
+    let label: String
+    let value: Double
+    let commit: (Double) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            CommitField(prompt: label, value: "\(Int(value.rounded()))") { text in
+                if let number = Double(text.trimmingCharacters(in: .whitespaces)), number > 0, number != value.rounded() {
+                    commit(number)
+                }
+            }
+            .frame(width: 64)
+        }
     }
 }

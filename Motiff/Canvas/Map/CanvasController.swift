@@ -191,8 +191,10 @@ final class CanvasController {
 
     /// The snapshot as drawn: with the nodes being dragged at their drag position.
     var displayedSnapshot: CanvasSnapshot {
-        guard let drag else { return snapshot }
-        return snapshot.moving(drag.ids, by: drag.offset)
+        var shown = snapshot
+        if let drag { shown = shown.moving(drag.ids, by: drag.offset) }
+        if let resize { shown = shown.resizing(resize.id, to: resize.rect, line: resize.line) }
+        return shown
     }
 
     /// Nodes on screen or near it, in `shown`. Only these get views.
@@ -786,6 +788,154 @@ final class CanvasController {
         self.drag = nil
     }
 
+    // MARK: Resizing
+
+    /// A node being resized by a corner (or an arrow by an end): its new box, in canvas points.
+    private(set) var resize: Resize?
+
+    struct Resize: Equatable {
+        var id: UUID
+        var rect: CGRect
+        /// For an arrow or line: its new run from start to end.
+        var line: CGVector?
+    }
+
+    /// Dragging a corner of the selected node. Ideas stay round, Text and pictures keep their
+    /// proportions (`freeAspect`, ⇧, lets a picture stretch).
+    func resizeChanged(_ id: UUID, corner: ResizeCorner, to viewPoint: CGPoint, freeAspect: Bool) {
+        guard let geometry = snapshot.node(id), let resized = node(id), !resized.isLine else { return }
+        if resize == nil { endEditing() }
+        let point = camera.canvasPoint(viewPoint, in: viewSize)
+        let keep = resized.isIdea || resized.kind == .text || (resized.kind == .reference && !freeAspect)
+        resize = Resize(id: id, rect: CanvasLayout.resized(geometry.rect, corner: corner, to: point, keepingAspect: keep))
+    }
+
+    /// Dragging one end of the selected arrow or line.
+    func lineEndChanged(_ id: UUID, isEnd: Bool, to viewPoint: CGPoint) {
+        guard let geometry = snapshot.node(id), geometry.isLine else { return }
+        if resize == nil { endEditing() }
+        let point = camera.canvasPoint(viewPoint, in: viewSize)
+        let start = isEnd ? geometry.lineStart : point
+        let end = isEnd ? point : geometry.lineEnd
+        resize = Resize(
+            id: id,
+            rect: CanvasLayout.lineRect(from: start, to: end),
+            line: CGVector(dx: end.x - start.x, dy: end.y - start.y)
+        )
+    }
+
+    /// Writes the resize: one change, one Undo step.
+    func resizeEnded() {
+        guard let resize else { return }
+        self.resize = nil
+        guard let resized = node(resize.id) else { return }
+        if let line = resize.line {
+            let center = CGPoint(x: resize.rect.midX, y: resize.rect.midY)
+            CanvasGraph.setLine(
+                resized,
+                from: CGPoint(x: center.x - line.dx / 2, y: center.y - line.dy / 2),
+                to: CGPoint(x: center.x + line.dx / 2, y: center.y + line.dy / 2)
+            )
+        } else {
+            CanvasGraph.resize(resized, to: resize.rect)
+        }
+        save()
+        reload()
+    }
+
+    /// The inspector's W × H.
+    func setSize(_ size: CGSize, of id: UUID) {
+        guard let resized = node(id), let geometry = snapshot.node(id) else { return }
+        let rect = CGRect(
+            x: geometry.center.x - size.width / 2, y: geometry.center.y - size.height / 2,
+            width: max(size.width, CanvasLayout.minimumSide), height: max(size.height, CanvasLayout.minimumSide)
+        )
+        update { CanvasGraph.resize(resized, to: rect) }
+    }
+
+    func resetSize(of id: UUID) {
+        guard let resized = node(id) else { return }
+        update { CanvasGraph.resetSize(resized) }
+    }
+
+    // MARK: Text size and line style
+
+    /// The steps − and + (and ⌥⌘= ⌥⌘−) go through.
+    static let fontSizes: [Double] = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+
+    /// The letters' size of the first selected node with words.
+    var selectionFontSize: Double? {
+        selectedNodes.first(where: \.hasWords)?.effectiveFontSize
+    }
+
+    func setFontSize(_ size: Double) {
+        let nodes = selectedNodes.filter(\.hasWords)
+        guard !nodes.isEmpty else { return }
+        update { CanvasGraph.setFontSize(size, of: nodes) }
+    }
+
+    /// Bigger (1) or smaller (−1) letters, to the next step.
+    func stepFontSize(by step: Int) {
+        guard let current = selectionFontSize else { return }
+        let next = step > 0
+            ? Self.fontSizes.first { $0 > current } ?? current
+            : Self.fontSizes.last { $0 < current } ?? current
+        if next != current { setFontSize(next) }
+    }
+
+    /// How thick the selected line or arrow is, or the selected shapes' border.
+    var selectionStrokeWidth: Double? {
+        if let edge = selectedEdge { return Double(edge.width ?? 2) }
+        return selectedNodes.first { $0.kind == .shape }?.effectiveStrokeWidth
+    }
+
+    func setStrokeWidth(_ width: Double) {
+        if let edge = selectedEdge {
+            guard let link = parts(of: edge).link else { return }
+            update { CanvasGraph.style(link, width: width) }
+            return
+        }
+        let shapes = selectedNodes.filter { $0.kind == .shape }
+        guard !shapes.isEmpty else { return }
+        update { CanvasGraph.setStrokeWidth(width, of: shapes) }
+    }
+
+    /// Whether the selected link or arrows are dashed.
+    var selectionIsDashed: Bool {
+        if let edge = selectedEdge { return edge.dashed ?? (edge.type == .relatesTo) }
+        return selectedNodes.contains { $0.isLine && $0.isDashed }
+    }
+
+    func toggleDashed() {
+        let dashed = !selectionIsDashed
+        if let edge = selectedEdge {
+            guard let link = parts(of: edge).link else { return }
+            update { CanvasGraph.style(link, dashed: dashed) }
+            return
+        }
+        let lines = selectedNodes.filter(\.isLine)
+        guard !lines.isEmpty else { return }
+        update { CanvasGraph.setDashed(dashed, of: lines) }
+    }
+
+    /// The selected link's or arrow's arrowheads.
+    func setArrowheads(start: Bool, end: Bool) {
+        if let edge = selectedEdge {
+            guard let link = parts(of: edge).link else { return }
+            update { CanvasGraph.style(link, startArrow: start, endArrow: end) }
+            return
+        }
+        let lines = selectedNodes.filter(\.isLine)
+        guard !lines.isEmpty else { return }
+        update { for line in lines { CanvasGraph.setArrowheads(of: line, start: start, end: end) } }
+    }
+
+    /// A picture on its own, or in its card.
+    func setBare(_ bare: Bool, of id: UUID) {
+        guard let picture = node(id) else { return }
+        update { CanvasGraph.setBare(bare, of: [picture]) }
+    }
+
     // MARK: Connecting
 
     /// Dragging a node's handle. Over another node, that node is the target.
@@ -1176,10 +1326,12 @@ final class CanvasController {
         let references = ids.compactMap { id in all.first { $0.id == id } }
         guard !references.isEmpty else { return }
         placeEach(references, at: point ?? camera.center, onto: targetID) { reference, position, idea, context in
-            CanvasGraph.addNode(
+            let node = CanvasGraph.addNode(
                 reference.hasMedia ? .reference : .prompt,
                 to: canvas, parent: idea, at: position, reference: reference, in: context
             )
+            node.isBare = reference.hasMedia
+            return node
         }
     }
 
@@ -1200,10 +1352,13 @@ final class CanvasController {
                 return node
             case .media, .prompt:
                 guard let reference = CaptureService.makeReference(item, in: context) else { return nil }
-                return CanvasGraph.addNode(
+                let node = CanvasGraph.addNode(
                     reference.hasMedia ? .reference : .prompt,
                     to: canvas, parent: idea, at: position, reference: reference, in: context
                 )
+                // Pictures land on their own, as on a moodboard; "Show as Card" puts them in one.
+                node.isBare = reference.hasMedia
+                return node
             }
         }
     }
