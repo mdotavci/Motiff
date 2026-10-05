@@ -71,7 +71,7 @@ struct CanvasMapView: View {
                 guard !items.isEmpty else { return }
                 photoItems = []
                 let target = controller.pasteTargetID
-                Task { await controller.capture(await Self.captureItems(from: items), at: nil, onto: target) }
+                Task { await controller.capture(await CaptureService.items(from: items), at: nil, onto: target) }
             }
             .sheet(isPresented: Binding(get: { controller.showsLibrary }, set: { controller.showsLibrary = $0 })) {
                 LibraryDrawer { reference in
@@ -445,20 +445,6 @@ struct CanvasMapView: View {
     private static let handleSize: CGFloat = 22
     #else
     private static let handleSize: CGFloat = 12
-    #endif
-
-    #if os(iOS)
-    /// Photos picked on iPhone, read as data with their type.
-    private static func captureItems(from items: [PhotosPickerItem]) async -> [CaptureItem] {
-        var captured: [CaptureItem] = []
-        for item in items {
-            guard let type = item.supportedContentTypes.first,
-                  let data = try? await item.loadTransferable(type: Data.self)
-            else { continue }
-            captured.append(.imageData(data, type))
-        }
-        return captured
-    }
     #endif
 
     /// ⇧Tab arrives as the back-tab character.

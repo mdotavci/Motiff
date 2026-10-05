@@ -7,6 +7,7 @@ import UIKit
 
 /// Context menu for a Reference tile: copy, boards, reveal, delete.
 struct ReferenceMenu: View {
+    @Environment(\.modelContext) private var context
     let reference: Reference
     let boards: [Board]
     let onDelete: () -> Void
@@ -22,11 +23,14 @@ struct ReferenceMenu: View {
         }
         .disabled(!reference.hasMedia)
 
-        if !boards.isEmpty {
-            Menu("Boards") {
-                ForEach(boards) { board in
-                    Toggle(board.name, isOn: membership(in: board))
-                }
+        Menu("Boards", systemImage: "rectangle.stack") {
+            ForEach(boards) { board in
+                Toggle(board.displayName, isOn: membership(in: board))
+            }
+            if !boards.isEmpty { Divider() }
+            Button("New Board With This") {
+                Board.make(name: "New board", in: context).add([reference])
+                try? context.save()
             }
         }
 

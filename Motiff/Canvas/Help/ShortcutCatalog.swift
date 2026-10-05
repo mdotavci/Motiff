@@ -67,6 +67,7 @@ enum ShortcutCatalog {
     // MARK: App
 
     static let newCanvas = Shortcut("New Canvas", "n", .command)
+    static let newBoard = Shortcut("New Board", "n", [.command, .shift])
     static let showShortcuts = Shortcut("Keyboard Shortcuts", "/", .command)
     static let goTo = Shortcut("Go To…", "k", .command)
     static let undo = Shortcut("Undo", "z", .command)
@@ -161,6 +162,12 @@ enum ShortcutCatalog {
     static let nextSibling = Shortcut("Next at the Same Level", .rightArrow)
     static let copyPrompt = Shortcut("Copy Prompt", "c", [.command, .shift])
 
+    // MARK: Boards
+
+    static let addToBoard = Shortcut("Put a Reference on a Board", pointer: "Drag it onto the Board in the sidebar")
+    static let addToBoardFromMenu = Shortcut("Put It on a Board, or a New One", pointer: "Right-click › Boards")
+    static let removeFromBoard = Shortcut("Take It off the Board", pointer: "Right-click › Remove from Board")
+
     // MARK: Canvas: tools
 
     static let selectTool = Shortcut("Select Tool", "v")
@@ -199,6 +206,7 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Motiff", items: [newCanvas, goTo, undo, redo, showShortcuts]),
         ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
+        ShortcutSection(title: "Boards", items: [newBoard, addToBoard, removeFromBoard, addToBoardFromMenu]),
         ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
         ShortcutSection(title: "Canvas tools", items: [
             selectTool, handTool, ideaTool, noteTool, textTool, imageTool, noteByDoubleClick,

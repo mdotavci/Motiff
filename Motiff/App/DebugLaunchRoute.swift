@@ -7,7 +7,7 @@ import AppKit
 /// Launch arguments that let CI (and agents) open a screen and snapshot it without clicking.
 /// They land in UserDefaults' argument domain, so there's nothing to parse:
 ///
-///     -MotiffOpen library | inbox | boards | canvasgraph | canvas:<title>
+///     -MotiffOpen library | inbox | boards | board:<name> | canvasgraph | canvas:<title>
 ///     -MotiffSnapshot <name>     writes Snapshots/<name>.png in the library folder (Mac)
 ///     -MotiffSelect <title>      on a Canvas, selects the node with that title
 ///     -MotiffInspector YES       on a Canvas, opens the inspector
@@ -78,11 +78,17 @@ enum DebugLaunchRoute {
     }
 
     #if os(macOS)
-    static func selection(for route: String, canvases: [Canvas]) -> SidebarSelection {
+    static func selection(for route: String, canvases: [Canvas], boards: [Board] = []) -> SidebarSelection {
         switch route {
         case "inbox": return .inbox
         case "boards": return .boards
         case "canvasgraph": return .canvasGraph
+        case let route where route.hasPrefix("board:"):
+            let name = String(route.dropFirst("board:".count))
+            if let board = boards.first(where: { $0.name == name }) {
+                return .board(board.id)
+            }
+            return .boards
         case let route where route.hasPrefix("canvas:"):
             let title = String(route.dropFirst("canvas:".count))
             if let canvas = canvases.first(where: { $0.title == title }) {

@@ -3,6 +3,7 @@ import SwiftUI
 /// Canvas actions the menu bar can reach in the focused window.
 struct CanvasActions {
     var newCanvas: @MainActor () -> Void
+    var newBoard: @MainActor () -> Void
 }
 
 /// Zoom for the Canvas in the focused window. While it's set, View › Zoom In / Zoom Out /
@@ -78,6 +79,9 @@ struct CanvasCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button(ShortcutCatalog.newCanvas.title) { actions?.newCanvas() }
                 .shortcut(ShortcutCatalog.newCanvas)
+                .disabled(actions == nil)
+            Button(ShortcutCatalog.newBoard.title) { actions?.newBoard() }
+                .shortcut(ShortcutCatalog.newBoard)
                 .disabled(actions == nil)
             Button(ShortcutCatalog.importFiles.title) { importFiles?.run() }
                 .shortcut(ShortcutCatalog.importFiles)

@@ -33,9 +33,10 @@ enum SidebarItem: Hashable, CaseIterable {
     }
 }
 
-/// What the sidebar has selected: a fixed section, or one Canvas file.
+/// What the sidebar has selected: a fixed section, one Board, or one Canvas file.
 enum SidebarSelection: Hashable {
     case inbox, library, boards, canvasGraph
+    case board(UUID)
     case canvas(UUID)
 }
 
@@ -43,6 +44,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.undoManager) private var undoManager
     @Query(sort: \Canvas.createdAt) private var canvases: [Canvas]
+    @Query(sort: \Board.createdAt) private var boards: [Board]
     @Query(sort: \Reference.createdAt, order: .reverse) private var references: [Reference]
     @FocusedValue(\.importFiles) private var importFiles
 
@@ -50,6 +52,8 @@ struct RootView: View {
     @State private var renaming: Canvas?
     @State private var draftTitle = ""
     @State private var pendingDelete: Canvas?
+    @State private var renamingBoard: Board?
+    @State private var pendingBoardDelete: Board?
     @State private var showsShortcuts = false
     /// The ⌘K palette's items while it's open.
     @State private var paletteItems: [PaletteItem]?
@@ -64,6 +68,33 @@ struct RootView: View {
                 ForEach(SidebarItem.allCases, id: \.self) { item in
                     Label(item.title, systemImage: item.systemImage)
                         .tag(item.selection)
+                }
+                Section {
+                    ForEach(boards) { board in
+                        Label(board.displayName, systemImage: "rectangle.stack")
+                            .tag(SidebarSelection.board(board.id))
+                            .contextMenu {
+                                Button("Rename…") {
+                                    draftTitle = board.name
+                                    renamingBoard = board
+                                }
+                                Divider()
+                                Button("Delete…", role: .destructive) { pendingBoardDelete = board }
+                            }
+                            // References dragged from the Library (or a Board) land on this Board.
+                            .dropDestination(for: String.self) { items, _ in
+                                add(items, to: board)
+                            }
+                    }
+                } header: {
+                    HStack {
+                        Text("Boards")
+                        Spacer()
+                        Button("New Board", systemImage: "plus", action: newBoard)
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.borderless)
+                            .help("New Board (\(ShortcutCatalog.newBoard.keys))")
+                    }
                 }
                 Section {
                     ForEach(canvases) { canvas in
@@ -94,7 +125,7 @@ struct RootView: View {
             detail
         }
         .tint(.primary)
-        .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas))
+        .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas, newBoard: newBoard))
         .focusedSceneValue(\.showShortcuts, ShortcutsAction { showsShortcuts = true })
         .focusedSceneValue(\.showPalette, PaletteAction(show: showPalette))
         #if DEBUG
@@ -127,6 +158,23 @@ struct RootView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .alert("Name the Board", isPresented: isRenamingBoard) {
+            TextField("Name", text: $draftTitle)
+            Button("Save") {
+                renamingBoard?.name = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                try? context.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete “\(pendingBoardDelete?.displayName ?? "")”?",
+            isPresented: isConfirmingBoardDelete,
+            presenting: pendingBoardDelete
+        ) { board in
+            Button("Delete Board", role: .destructive) { delete(board) }
+        } message: { _ in
+            Text("Its references stay in the Library.")
+        }
         .confirmationDialog(
             "Delete “\(pendingDelete?.displayTitle ?? "")”?",
             isPresented: isConfirmingDelete,
@@ -147,7 +195,19 @@ struct RootView: View {
         case .inbox:
             InboxView()
         case .boards:
-            BoardsView()
+            BoardsView { board in selection = .board(board.id) }
+        case .board(let id):
+            if let board = boards.first(where: { $0.id == id }) {
+                NavigationStack {
+                    ReferenceCollectionView(board: board)
+                        .navigationDestination(for: Reference.self) { reference in
+                            ReferenceDetailView(reference: reference)
+                        }
+                }
+                .id(board.id)
+            } else {
+                EmptyState(title: "Board", message: "This board was deleted.")
+            }
         case .canvasGraph:
             CanvasGraphOverview { canvas in selection = .canvas(canvas.id) }
         case .canvas(let id):
@@ -168,6 +228,39 @@ struct RootView: View {
 
     private var isConfirmingDelete: Binding<Bool> {
         Binding { pendingDelete != nil } set: { if !$0 { pendingDelete = nil } }
+    }
+
+    private var isRenamingBoard: Binding<Bool> {
+        Binding { renamingBoard != nil } set: { if !$0 { renamingBoard = nil } }
+    }
+
+    private var isConfirmingBoardDelete: Binding<Bool> {
+        Binding { pendingBoardDelete != nil } set: { if !$0 { pendingBoardDelete = nil } }
+    }
+
+    /// ⇧⌘N: a new Board, selected, with its name asked for.
+    private func newBoard() {
+        let board = Board.make(name: "", in: context)
+        try? context.save()
+        selection = .board(board.id)
+        draftTitle = ""
+        renamingBoard = board
+    }
+
+    private func delete(_ board: Board) {
+        if selection == .board(board.id) { selection = .boards }
+        Board.delete(board, in: context)
+        try? context.save()
+    }
+
+    /// Library tiles dragged onto a Board in the sidebar.
+    private func add(_ payloads: [String], to board: Board) -> Bool {
+        let ids = Set(payloads.compactMap(LibraryDrag.referenceID(in:)))
+        let dropped = references.filter { ids.contains($0.id) }
+        guard !dropped.isEmpty else { return false }
+        board.add(dropped)
+        try? context.save()
+        return true
     }
 
     /// ⌘K. Built now, while the Canvas or Library still has the keyboard, so their actions
@@ -224,7 +317,8 @@ struct RootView: View {
             CanvasStress.make(in: context, references: Array(references.prefix(12)))
         }
         let all = (try? context.fetch(FetchDescriptor<Canvas>())) ?? []
-        selection = DebugLaunchRoute.selection(for: route, canvases: all)
+        let allBoards = (try? context.fetch(FetchDescriptor<Board>())) ?? []
+        selection = DebugLaunchRoute.selection(for: route, canvases: all, boards: allBoards)
         showsShortcuts = DebugLaunchRoute.showsShortcuts
         if let name = DebugLaunchRoute.snapshotName {
             try? await Task.sleep(for: .seconds(DebugLaunchRoute.settleSeconds))
