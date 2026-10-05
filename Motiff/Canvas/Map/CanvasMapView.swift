@@ -137,12 +137,18 @@ struct CanvasMapView: View {
                 }
             }
             #endif
+            #if os(macOS)
             .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
                 CanvasInspector(controller: controller)
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
-                    // On iPhone the inspector is a sheet: half height, pull up for all of it.
+            }
+            #else
+            // On iPhone the inspector is a sheet: half height, pull up for all of it.
+            .sheet(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
+                CanvasInspector(controller: controller)
                     .presentationDetents([.medium, .large])
             }
+            #endif
             .toolbar { toolbar }
             .onAppear {
                 controller.reload()
