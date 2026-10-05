@@ -127,7 +127,7 @@ final class CanvasController {
         #if DEBUG
         applyLaunchSelection()
         applyLaunchFilter()
-        if let mode = DebugLaunchRoute.viewName.flatMap(CanvasViewMode.init(rawValue:)) { viewMode = mode }
+        if let mode = DebugLaunchRoute.viewName.flatMap(CanvasViewMode.init(rawValue:)) { self.viewMode = mode }
         if let text = DebugLaunchRoute.findText {
             isSearching = true
             searchText = text
