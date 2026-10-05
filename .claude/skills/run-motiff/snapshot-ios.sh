@@ -47,8 +47,9 @@ for route in "$@"; do
 
   # If the app hung or died on this route, keep what explains it next to the screenshot:
   # a sample of the running process (its main thread), or the newest crash report.
-  pid=$(pgrep -f "Motiff.app/Motiff$" | head -1 || true)
-  if [ -n "$pid" ]; then
+  pid=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null \
+    | awk '/UIKitApplication:com\.mdotavci\.motiff\[/ { print $1; exit }' || true)
+  if [ -n "$pid" ] && [ "$pid" != "-" ]; then
     sample "$pid" 1 -file "$OUT/$name.sample.txt" > /dev/null 2>&1 || true
   else
     crash=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/Motiff*.ips 2>/dev/null | head -1 || true)
