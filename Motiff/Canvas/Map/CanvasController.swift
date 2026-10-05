@@ -71,7 +71,8 @@ final class CanvasController {
     /// A Note just made with Tab: if it's left empty, it isn't kept.
     @ObservationIgnored private var freshID: UUID?
 
-    @ObservationIgnored private var nodesByID: [UUID: CanvasNode] = [:]
+    /// Observed, so views that look a node up redraw once it's loaded. It changes with `snapshot`.
+    private var nodesByID: [UUID: CanvasNode] = [:]
     @ObservationIgnored private var needsFit: Bool
     /// True while the camera is still the automatic fit, so a resize (the window settling,
     /// the inspector opening) fits again. Any pan or zoom by the user ends it.

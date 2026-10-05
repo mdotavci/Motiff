@@ -14,6 +14,8 @@ struct CanvasDetailView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Fills the Map even while its content is still loading, so nothing shows through.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
         .environment(\.openReference, OpenReferenceAction { [controller] reference in
             controller.openDetail(reference: reference)

@@ -46,7 +46,7 @@ private struct NodeInspector: View {
                     .font(.headline)
                     .lineLimit(3)
                 Button("Open Full Size") { controller.openDetail(node.id) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.borderless)
                     .font(.callout)
                     .help("Open (\(ShortcutCatalog.openDetail.keys))")
             }
