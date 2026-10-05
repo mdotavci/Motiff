@@ -125,6 +125,15 @@ private struct NodeInspector: View {
                     controller.update { CanvasGraph.edit(node) { $0.body = text } }
                 }
             }
+        case .text:
+            DetailSection("Text") {
+                CommitField(prompt: "Text", value: node.body ?? "", axis: .vertical) { text in
+                    controller.update { CanvasGraph.edit(node) { $0.body = text } }
+                }
+            }
+            DetailSection("Size") {
+                TextSizePicker(controller: controller, node: node)
+            }
         case .link:
             DetailSection("Title") {
                 CommitField(prompt: "Title", value: node.title ?? "") { text in
@@ -158,6 +167,22 @@ private struct NodeInspector: View {
 // MARK: - Building blocks
 
 /// The Canvas's categories as rows with their color, a check on the current one, and None.
+/// Small, Medium, Large, Huge for a Text node. One Undo step each.
+struct TextSizePicker: View {
+    let controller: CanvasController
+    let node: CanvasNode
+
+    var body: some View {
+        Picker("Size", selection: Binding(get: { node.textSize }, set: { controller.setTextSize($0, of: node.id) })) {
+            ForEach(TextSize.allCases) { size in
+                Text(size.label).tag(size)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+    }
+}
+
 private struct CategoryPicker: View {
     let categories: [CanvasCategory]
     let isOn: (CanvasCategory?) -> Bool

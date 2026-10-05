@@ -32,7 +32,7 @@ its own shell (window layout, navigation) and its own capture methods.
 5. Mac Share Extension (Safari and other apps' Share menu). Needs your Team ID for the App Group.
 6. On-device analysis: OCR, feature print, colors
 7. Claude: tags on save, "Describe as prompt", API key in the Keychain
-8. Recipe editor: inline parts, live prompt, copy. Saving an edit creates a Remix.
+8. Recipe editor: inline parts, live prompt, copy. Edits change the Reference in place (⌘Z undoes); "Save as Remix" is a separate, explicit action.
 9. Search: text search plus filter chips (origin, type, color), and "More like this"
 10. Boards: create, rename, add and remove References. A Reference can be on many Boards.
 11. Inbox: saves from the last 7 days that haven't been opened
@@ -48,7 +48,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Belongs to | `CanvasNode.parent` only; `CanvasLink` stores "relates to" | One record per edge, so hierarchy and lines can't drift |
 | Prompt cards | `NodeKind.prompt`: a Reference drawn prompt first | The same Reference can be a picture on one Canvas and a prompt on another |
 | No-media prompts | Text/Code prompts keep an empty `mediaFilename` and draw a typographic cover | Never blank; the cover takes the category color, which is per Canvas |
-| Category colors | A fixed set of ten swatches | No category can land on focus red; each reads on dark and light |
+| Colors | A 16-swatch pastel palette (fill + ink per swatch) plus a free Custom… color, for categories and for any node, text, line or arrow. No pure red in the palette | You asked for nicer colors and to recolor everything; the selection ring stays the only red |
 | Changes | Only through `CanvasGraph` | The rules (no cycles, one link per pair, children move up on delete) live in one place |
 | Tests | `MotiffTests`, model layer only, no host app | Run in CI on every push |
 | Placement | New nodes take the first free spot on rings around their Idea; nothing is ever re-laid out | Positions you dragged to stay put |
@@ -74,6 +74,13 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 8. Outline view, Graph view, cross-canvas graph *(done)*
 9. ⌘K palette, search, minimap, semantic zoom, performance pass *(done; 60 fps to be checked on the M1)*
 10. iPhone: Canvases tab, Outline first, touch Map *(done)*
+
+### Round 2 — after first use
+
+11. Adding things: tool bar (V H O N T I L), double-click for a Note, free Text nodes, Library panel (⌥⌘L) to drag References in; iPhone + menu with Photos
+12. Boards: create, rename, delete; drop or drag References onto them
+13. Colors: pastel palette, color any node, text, line or arrow; arrowheads; selectable lines
+14. Detail page: everything editable, a markdown editor with a formatting bar, add images and notes from it
 
 ## Phase 2 — iPhone
 

@@ -94,6 +94,12 @@ final class CanvasController {
     private(set) var linkMode = false
     private(set) var linkSourceID: UUID?
 
+    /// What a click on the Map does: select (V), pan (H), or add an Idea, Note, Text or image
+    /// there (O N T I). Link (L) is link mode. Adding tools go back to Select once used.
+    private(set) var tool: CanvasTool = .select
+    /// ⌥⌘L: the Library panel beside the Map, to drag References in from.
+    var showsLibrary = false
+
     /// A Note just made with Tab: if it's left empty, it isn't kept.
     @ObservationIgnored private var freshID: UUID?
 
@@ -127,6 +133,7 @@ final class CanvasController {
         #if DEBUG
         applyLaunchSelection()
         applyLaunchFilter()
+        showsLibrary = DebugLaunchRoute.showsDrawer
         if let mode = DebugLaunchRoute.viewName.flatMap(CanvasViewMode.init(rawValue:)) { self.viewMode = mode }
         if let text = DebugLaunchRoute.findText {
             isSearching = true
@@ -451,17 +458,62 @@ final class CanvasController {
         add(.idea)
     }
 
+    /// Free text on the selected Idea (or the selected card's Idea, or the root), typed into.
+    func addText() {
+        add(.text)
+    }
+
     private func add(_ kind: NodeKind) {
         endEditing()
         guard let context, let parent = anchorIdea,
-              let node = CanvasGraph.addChild(kind, under: parent, body: kind == .note ? "" : nil, in: context)
+              let node = CanvasGraph.addChild(kind, under: parent, body: kind == .idea ? nil : "", in: context)
         else { return }
+        finishAdding(node)
+    }
+
+    /// Selects the new node and starts typing into it. A Note or Text left empty isn't kept.
+    private func finishAdding(_ node: CanvasNode) {
         save()
         reload()
         selection = [node.id]
-        if kind == .note { freshID = node.id }
+        if node.kind == .note || node.kind == .text { freshID = node.id }
         beginEditing(node.id)
         reveal(node.id)
+    }
+
+    // MARK: Tools
+
+    func setTool(_ new: CanvasTool) {
+        endEditing()
+        if (new == .link) != linkMode {
+            linkMode.toggle()
+            linkSourceID = nil
+        }
+        tool = new
+    }
+
+    /// The node under a point in the view, if any.
+    func nodeID(at viewPoint: CGPoint) -> UUID? {
+        snapshot.node(at: camera.canvasPoint(viewPoint, in: viewSize))?.id
+    }
+
+    /// The Idea, Note and Text tools (and double-click): a new one where the Map was clicked,
+    /// typed into. On an Idea, or one of its cards, it belongs to that Idea and takes a free spot
+    /// around it; on empty space it stays loose, right there. The tool goes back to Select.
+    func place(_ kind: NodeKind, at viewPoint: CGPoint) {
+        endEditing()
+        guard let context else { return }
+        let point = camera.canvasPoint(viewPoint, in: viewSize)
+        let target = snapshot.node(at: point).flatMap { self.node($0.id) }
+        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
+        let node = CanvasGraph.addNode(kind, to: canvas, parent: idea, at: point, body: kind == .idea ? nil : "", in: context)
+        if let idea { node.position = CanvasGraph.freeSpot(for: node, around: idea) }
+        if tool != .select { setTool(.select) }
+        finishAdding(node)
+    }
+
+    func toggleLibrary() {
+        showsLibrary.toggle()
     }
 
     /// The Idea new things attach to.
@@ -483,7 +535,7 @@ final class CanvasController {
         switch node.kind {
         case .idea, .link:
             editDraft = node.title ?? ""
-        case .note:
+        case .note, .text:
             editDraft = node.body ?? ""
         case .reference, .prompt:
             openDetail(id)
@@ -514,13 +566,14 @@ final class CanvasController {
                 if text != (node.title ?? "") { CanvasGraph.rename(node, to: text) }
             case .link:
                 if text != (node.title ?? "") { CanvasGraph.edit(node) { $0.title = text.isEmpty ? nil : text } }
-            case .note:
+            case .note, .text:
                 if text != (node.body ?? "") { CanvasGraph.edit(node) { $0.body = text } }
             case .reference, .prompt:
                 break
             }
         }
-        if fresh, node.kind == .note, (node.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if fresh, node.kind == .note || node.kind == .text,
+           (node.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             CanvasGraph.delete([node], branch: false, in: context)
         }
         save()
@@ -603,12 +656,19 @@ final class CanvasController {
         endEditing()
         linkMode.toggle()
         linkSourceID = nil
+        tool = linkMode ? .link : .select
+    }
+
+    func setTextSize(_ size: TextSize, of id: UUID) {
+        guard let node = node(id), node.textSize != size else { return }
+        update { CanvasGraph.edit(node) { $0.textSize = size } }
     }
 
     /// The node menu's Link To…: link mode, with this node already picked as the first.
     func startLink(from id: UUID) {
         endEditing()
         linkMode = true
+        tool = .link
         linkSourceID = id
         selection = [id]
     }
@@ -697,7 +757,7 @@ final class CanvasController {
     func setViewMode(_ mode: CanvasViewMode) {
         guard mode != viewMode else { return }
         endEditing()
-        if linkMode { toggleLinkMode() }
+        if tool != .select { setTool(.select) }
         viewMode = mode
     }
 
@@ -916,39 +976,80 @@ final class CanvasController {
     }
 
     func capture(_ items: [CaptureItem], at viewPoint: CGPoint?, onto targetID: UUID?) async {
-        let prepared = await CapturePrep.prepare(items)
         let point = viewPoint.map { camera.canvasPoint($0, in: viewSize) } ?? camera.center
+        // References dragged in from the Library panel are already in the Library.
+        var existing: [UUID] = []
+        var rest: [CaptureItem] = []
+        for item in items {
+            if case let .text(text) = item, let id = LibraryDrag.referenceID(in: text) {
+                existing.append(id)
+            } else {
+                rest.append(item)
+            }
+        }
+        if !existing.isEmpty { place(references: existing, at: point, onto: targetID) }
+        guard !rest.isEmpty else { return }
+        let prepared = await CapturePrep.prepare(rest)
         place(prepared, at: point, onto: targetID)
+    }
+
+    /// The Library panel: a card for each Reference (no copy; the same Reference), on the Idea
+    /// under the drop or the selected one, or loose where it was dropped.
+    func place(references ids: [UUID], at point: CGPoint? = nil, onto targetID: UUID?) {
+        let all = (try? context?.fetch(FetchDescriptor<Reference>())) ?? []
+        let references = ids.compactMap { id in all.first { $0.id == id } }
+        guard !references.isEmpty else { return }
+        placeEach(references, at: point ?? camera.center, onto: targetID) { reference, position, idea, context in
+            CanvasGraph.addNode(
+                reference.hasMedia ? .reference : .prompt,
+                to: canvas, parent: idea, at: position, reference: reference, in: context
+            )
+        }
     }
 
     /// Puts captured things on the Canvas, all in one Undo step. Dropped on an Idea (or one of
     /// its cards) they belong to that Idea and take free spots around it; dropped on empty space
     /// they stay loose where they landed, fanned out a little.
     func place(_ prepared: [PreparedCapture], at point: CGPoint, onto targetID: UUID?) {
-        guard let context, !prepared.isEmpty else {
-            if prepared.isEmpty { Self.refuse() }
+        guard !prepared.isEmpty else {
+            Self.refuse()
             return
         }
-        endEditing()
-        let target = targetID.flatMap { self.node($0) }
-        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
-        var made: [CanvasNode] = []
-        for item in prepared {
-            let offset = CGFloat(made.count) * 28
-            let position = CGPoint(x: point.x + offset, y: point.y + offset)
-            let node: CanvasNode
+        placeEach(prepared, at: point, onto: targetID) { item, position, idea, context in
             switch item {
             case let .link(url, title, iconFilename):
-                node = CanvasGraph.addNode(.link, to: canvas, parent: idea, at: position, title: title, in: context)
+                let node = CanvasGraph.addNode(.link, to: canvas, parent: idea, at: position, title: title, in: context)
                 node.urlString = url.absoluteString
                 node.iconFilename = iconFilename
+                return node
             case .media, .prompt:
-                guard let reference = CaptureService.makeReference(item, in: context) else { continue }
-                node = CanvasGraph.addNode(
+                guard let reference = CaptureService.makeReference(item, in: context) else { return nil }
+                return CanvasGraph.addNode(
                     reference.hasMedia ? .reference : .prompt,
                     to: canvas, parent: idea, at: position, reference: reference, in: context
                 )
             }
+        }
+    }
+
+    /// Makes a node for each item, in one Undo step. Onto an Idea (or one of its cards) they
+    /// belong to that Idea and take free spots around it; otherwise they stay loose at `point`,
+    /// fanned out a little. Selects what was made.
+    private func placeEach<Item>(
+        _ items: [Item],
+        at point: CGPoint,
+        onto targetID: UUID?,
+        make: (Item, CGPoint, CanvasNode?, ModelContext) -> CanvasNode?
+    ) {
+        guard let context else { return }
+        endEditing()
+        let target = targetID.flatMap { self.node($0) }
+        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
+        var made: [CanvasNode] = []
+        for item in items {
+            let offset = CGFloat(made.count) * 28
+            let position = CGPoint(x: point.x + offset, y: point.y + offset)
+            guard let node = make(item, position, idea, context) else { continue }
             if let idea { node.position = CanvasGraph.freeSpot(for: node, around: idea) }
             made.append(node)
         }

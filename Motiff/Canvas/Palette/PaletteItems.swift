@@ -88,6 +88,7 @@ enum PaletteItems {
         case .prompt: "text.quote"
         case .note: "text.alignleft"
         case .link: "link"
+        case .text: "textformat"
         }
     }
 }

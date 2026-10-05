@@ -19,6 +19,7 @@ struct CanvasEditActions {
     var showsInspector: Bool
     var addNote: @MainActor () -> Void
     var addSubIdea: @MainActor () -> Void
+    var addText: @MainActor () -> Void
     var edit: @MainActor () -> Void
     var delete: @MainActor () -> Void
     var deleteBranch: @MainActor () -> Void
@@ -37,6 +38,10 @@ struct CanvasEditActions {
     var canFindNext: Bool
     var showsMinimap: Bool
     var toggleMinimap: @MainActor () -> Void
+    var tool: CanvasTool
+    var setTool: @MainActor (CanvasTool) -> Void
+    var showsLibrary: Bool
+    var toggleLibrary: @MainActor () -> Void
 }
 
 /// File › Import… (⌘O) in the focused Library or Canvas.
@@ -55,7 +60,7 @@ extension FocusedValues {
 /// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app), Import…,
 /// the Canvas menu, and Help › Keyboard Shortcuts (⌘/).
 ///
-/// Tab, Return, Space, L, ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
+/// Tab, Return, Space, the tool letters (V H O N T I L), ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
 /// take those keys away from every text field. Their menu items show no key; the help sheet
 /// lists them.
 struct CanvasCommands: Commands {
@@ -105,8 +110,27 @@ struct CanvasCommands: Commands {
             Button(editing?.showsMinimap == true ? "Hide Minimap" : "Show Minimap") { editing?.toggleMinimap() }
                 .shortcut(ShortcutCatalog.minimap)
                 .disabled(editing == nil)
+            Button(editing?.showsLibrary == true ? "Hide Library Panel" : ShortcutCatalog.libraryPanel.title) {
+                editing?.toggleLibrary()
+            }
+            .shortcut(ShortcutCatalog.libraryPanel)
+            .disabled(editing == nil)
             Divider()
+            // Plain letter keys, handled by the Map so text fields keep them; listed in ⌘/.
+            Menu("Tool") {
+                ForEach(CanvasTool.allCases) { tool in
+                    Toggle(isOn: Binding(
+                        get: { editing?.tool == tool },
+                        set: { if $0 { editing?.setTool(tool) } }
+                    )) {
+                        Text("\(tool.label)    \(String(tool.key).uppercased())")
+                    }
+                }
+            }
+            .disabled(editing?.viewMode != .map)
             Button(ShortcutCatalog.addNote.title) { editing?.addNote() }
+                .disabled(editing == nil)
+            Button("Add Text") { editing?.addText() }
                 .disabled(editing == nil)
             Button(ShortcutCatalog.addSubIdea.title) { editing?.addSubIdea() }
                 .shortcut(ShortcutCatalog.addSubIdea)

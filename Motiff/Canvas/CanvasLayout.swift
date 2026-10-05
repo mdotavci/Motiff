@@ -28,7 +28,9 @@ enum CanvasLayout {
         kind: NodeKind,
         ideaLevel: Int,
         heightOverWidth: CGFloat,
-        override: CGSize? = nil
+        override: CGSize? = nil,
+        text: String = "",
+        textSize: TextSize = .medium
     ) -> CGSize {
         if let override { return override }
         switch kind {
@@ -44,7 +46,26 @@ enum CanvasLayout {
             return noteSize
         case .link:
             return linkSize
+        case .text:
+            return textBox(for: text, size: textSize)
         }
+    }
+
+    /// Text nodes wrap at this width.
+    static let textMaxWidth: CGFloat = 420
+
+    /// Room for `text` at `size`, estimated from the letter count so it needs no fonts: each line
+    /// as wide as its letters up to `textMaxWidth`, then wrapping. Empty text still gets a line.
+    static func textBox(for text: String, size: TextSize) -> CGSize {
+        let font = CGFloat(size.fontSize)
+        let letter = font * 0.56
+        let padding: CGFloat = 8
+        let lines = text.isEmpty ? [""] : text.components(separatedBy: "\n")
+        let longest = lines.map(\.count).max() ?? 0
+        let width = min(textMaxWidth, max(font * 4, CGFloat(longest) * letter + padding * 2)).rounded()
+        let perLine = max(1, Int((width - padding * 2) / letter))
+        let rows = lines.reduce(0) { $0 + max(1, Int((Double($1.count) / Double(perLine)).rounded(.up))) }
+        return CGSize(width: width, height: (CGFloat(rows) * font * 1.3 + padding * 2).rounded())
     }
 
     @MainActor
@@ -57,7 +78,9 @@ enum CanvasLayout {
             kind: node.kind,
             ideaLevel: ideaLevel(isRoot: node.isRoot, depth: node.ideaDepth),
             heightOverWidth: node.reference?.displayAspectRatio ?? 1.25,
-            override: override
+            override: override,
+            text: node.kind == .text ? node.body ?? "" : "",
+            textSize: node.textSize
         )
     }
 }

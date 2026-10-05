@@ -41,7 +41,7 @@ struct CanvasDetailView: View {
                     } else {
                         EmptyState(title: node.kind.label, message: "This card's Reference was deleted.")
                     }
-                case .idea, .note, .link:
+                case .idea, .note, .link, .text:
                     IdeaDetailView(node: node, controller: controller)
                         .id(node.id)
                 }
@@ -160,7 +160,7 @@ private struct IdeaDetailView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-        case .note:
+        case .note, .text:
             Text(Self.markdown(node.body ?? ""))
                 .font(.title3)
                 .textSelection(.enabled)
@@ -234,7 +234,7 @@ private struct AttachedTile: View {
                         .lineLimit(3)
                         .padding(10)
                 }
-        case .note:
+        case .note, .text:
             Text(node.body ?? "")
                 .font(.callout)
                 .padding(Theme.unit * 1.5)

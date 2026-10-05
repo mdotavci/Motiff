@@ -33,6 +33,8 @@ final class CanvasNode {
     var urlString: String?
     /// Links: the favicon, stored in the Media folder.
     var iconFilename: String?
+    /// Text: its `TextSize`; nil is medium.
+    var textSizeRaw: Int?
 
     // MARK: Relationships
 
@@ -64,6 +66,11 @@ extension CanvasNode {
     }
 
     var isIdea: Bool { kind == .idea }
+
+    var textSize: TextSize {
+        get { textSizeRaw.flatMap(TextSize.init(rawValue:)) ?? .medium }
+        set { textSizeRaw = newValue.rawValue }
+    }
 
     var position: CGPoint {
         get { CGPoint(x: x, y: y) }
@@ -114,6 +121,8 @@ extension CanvasNode {
             return nonEmpty(title) ?? "Untitled idea"
         case .note:
             return nonEmpty(body.map(Self.firstLine)) ?? "Empty note"
+        case .text:
+            return nonEmpty(body.map(Self.firstLine)) ?? "Empty text"
         case .link:
             return nonEmpty(title) ?? nonEmpty(urlString) ?? "Link"
         case .reference, .prompt:

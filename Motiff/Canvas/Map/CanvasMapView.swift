@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
+#else
+import PhotosUI
 #endif
 
 /// One Canvas, as a Map, an Outline or a Graph (⌘1 ⌘2 ⌘3), with the inspector, the full-size
@@ -22,6 +24,15 @@ struct CanvasMapView: View {
     @State private var labelingEdge: CanvasSnapshot.Edge?
     @State private var labelDraft = ""
     @State private var isImporting = false
+    /// Where the Image tool was clicked, for the files the picker brings back; nil for ⌘O.
+    @State private var importPoint: CGPoint?
+    #if os(macOS)
+    /// The cursor pushed for the current tool, popped when the tool changes.
+    @State private var hasToolCursor = false
+    #else
+    @State private var showsPhotos = false
+    @State private var photoItems: [PhotosPickerItem] = []
+    #endif
     #if DEBUG
     @AppStorage("debug.fps") private var showsFrameRate = false
     #endif
@@ -47,10 +58,29 @@ struct CanvasMapView: View {
             }
             #endif
             .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+                let point = importPoint
+                importPoint = nil
                 guard case let .success(urls) = result else { return }
-                let target = controller.pasteTargetID
-                Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: nil, onto: target) }
+                // The Image tool: where it was clicked, on the Idea there if any. ⌘O: the selected Idea.
+                let target: UUID? = if let point { controller.nodeID(at: point) } else { controller.pasteTargetID }
+                Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: point, onto: target) }
             }
+            #if os(iOS)
+            .photosPicker(isPresented: $showsPhotos, selection: $photoItems, maxSelectionCount: 20, matching: .any(of: [.images, .videos]))
+            .onChange(of: photoItems) { _, items in
+                guard !items.isEmpty else { return }
+                photoItems = []
+                let target = controller.pasteTargetID
+                Task { await controller.capture(await Self.captureItems(from: items), at: nil, onto: target) }
+            }
+            .sheet(isPresented: Binding(get: { controller.showsLibrary }, set: { controller.showsLibrary = $0 })) {
+                LibraryDrawer { reference in
+                    controller.place(references: [reference.id], onto: controller.pasteTargetID)
+                    controller.showsLibrary = false
+                }
+                .presentationDetents([.medium, .large])
+            }
+            #endif
             .focusable()
             .focused($mapFocused)
             .focusEffectDisabled()
@@ -58,6 +88,7 @@ struct CanvasMapView: View {
                 keys: [
                     .tab, .return, .delete, .deleteForward, .escape, .space,
                     .leftArrow, .rightArrow, .upArrow, .downArrow, "l", Self.backTab,
+                    "v", "h", "o", "n", "t", "i",
                     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                 ],
                 phases: [.down, .repeat]
@@ -132,11 +163,17 @@ struct CanvasMapView: View {
             }
             .onChange(of: controller.viewMode) { mapFocused = true }
             #if os(macOS)
-            .onChange(of: controller.linkMode) { _, on in
-                if on { NSCursor.crosshair.push() } else { NSCursor.pop() }
+            .onChange(of: controller.tool) { _, tool in
+                if hasToolCursor { NSCursor.pop() }
+                hasToolCursor = tool != .select
+                switch tool {
+                case .select: break
+                case .hand: NSCursor.openHand.push()
+                case .idea, .note, .text, .image, .link: NSCursor.crosshair.push()
+                }
             }
             .onDisappear {
-                if controller.linkMode { NSCursor.pop() }
+                if hasToolCursor { NSCursor.pop() }
             }
             #endif
             .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
@@ -152,6 +189,7 @@ struct CanvasMapView: View {
                 showsInspector: controller.showsInspector,
                 addNote: controller.addNote,
                 addSubIdea: controller.addSubIdea,
+                addText: controller.addText,
                 edit: { controller.beginEditing() },
                 delete: { controller.deleteSelection(branch: false) },
                 deleteBranch: { controller.deleteSelection(branch: true) },
@@ -169,7 +207,11 @@ struct CanvasMapView: View {
                 findPrevious: { controller.findNext(by: -1) },
                 canFindNext: !controller.searchResults.isEmpty,
                 showsMinimap: controller.showsMinimap,
-                toggleMinimap: controller.toggleMinimap
+                toggleMinimap: controller.toggleMinimap,
+                tool: controller.tool,
+                setTool: controller.setTool,
+                showsLibrary: controller.showsLibrary,
+                toggleLibrary: controller.toggleLibrary
             ))
             .navigationTitle(canvas.displayTitle)
             #if os(iOS)
@@ -196,8 +238,13 @@ struct CanvasMapView: View {
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Menu("Add", systemImage: "plus") {
-                Button("Add Note", systemImage: "note.text.badge.plus", action: controller.addNote)
-                Button("Add Sub-Idea", systemImage: "plus.circle", action: controller.addSubIdea)
+                Button("Note", systemImage: "note.text", action: controller.addNote)
+                Button("Text", systemImage: "textformat", action: controller.addText)
+                Button("Idea", systemImage: "circle", action: controller.addSubIdea)
+                Divider()
+                Button("Photos and Videos…", systemImage: "photo.on.rectangle") { showsPhotos = true }
+                Button("Files…", systemImage: "folder") { isImporting = true }
+                Button("From the Library…", systemImage: "square.grid.2x2") { controller.showsLibrary = true }
             }
             Button("Inspector", systemImage: "info.circle", action: controller.toggleInspector)
         }
@@ -269,7 +316,12 @@ struct CanvasMapView: View {
         return ZStack(alignment: .topLeading) {
             Theme.canvasGround
                 .contentShape(Rectangle())
-                .onTapGesture {
+                // Double-click empty space: a Note right there.
+                .onTapGesture(count: 2, coordinateSpace: .named(Self.space)) { location in
+                    if controller.tool == .select { controller.place(.note, at: location) }
+                }
+                .onTapGesture(count: 1, coordinateSpace: .named(Self.space)) { location in
+                    guard !useTool(at: location) else { return }
                     controller.clearSelection()
                     mapFocused = true
                 }
@@ -341,6 +393,27 @@ struct CanvasMapView: View {
             ZoomControl(controller: controller)
                 .padding(Theme.gutter)
         }
+        #if os(macOS)
+        .overlay(alignment: .leading) {
+            ToolBar(controller: controller)
+                .padding(.leading, Theme.gutter)
+        }
+        .overlay(alignment: .trailing) {
+            if controller.showsLibrary {
+                LibraryDrawer { reference in
+                    controller.place(references: [reference.id], onto: controller.pasteTargetID)
+                } close: {
+                    controller.showsLibrary = false
+                }
+                .frame(width: 260)
+                .frame(maxHeight: .infinity)
+                .background(Theme.cardSurface)
+                .overlay(alignment: .leading) { Divider() }
+                .transition(.move(edge: .trailing))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: controller.showsLibrary)
+        #endif
         .overlay(alignment: .bottomLeading) {
             if controller.showsMinimap, !controller.snapshot.nodes.isEmpty {
                 Minimap(controller: controller)
@@ -374,6 +447,20 @@ struct CanvasMapView: View {
     private static let handleSize: CGFloat = 12
     #endif
 
+    #if os(iOS)
+    /// Photos picked on iPhone, read as data with their type.
+    private static func captureItems(from items: [PhotosPickerItem]) async -> [CaptureItem] {
+        var captured: [CaptureItem] = []
+        for item in items {
+            guard let type = item.supportedContentTypes.first,
+                  let data = try? await item.loadTransferable(type: Data.self)
+            else { continue }
+            captured.append(.imageData(data, type))
+        }
+        return captured
+    }
+    #endif
+
     /// ⇧Tab arrives as the back-tab character.
     private static var backTab: KeyEquivalent { KeyEquivalent("\u{19}") }
 
@@ -392,6 +479,10 @@ struct CanvasMapView: View {
     ) -> some View {
         let isEditing = controller.editingID == node.id
         let isSelected = controller.selection.contains(node.id)
+        // Text grows as it's typed; everything else keeps its size.
+        let frame = isEditing && node.kind == .text
+            ? CanvasLayout.textBox(for: controller.editDraft, size: node.textSize)
+            : geometry.rect.size
         // While typing, clicks and drags belong to the text field.
         let mask: GestureMask = isEditing ? .subviews : .all
         return Group {
@@ -401,14 +492,14 @@ struct CanvasMapView: View {
             } else {
                 NodeView(
                     node: node,
-                    size: geometry.rect.size,
+                    size: frame,
                     zoom: camera.zoom,
                     editor: isEditing ? controller : nil,
                     isPlaying: isHovered && controller.drag == nil
                 )
             }
         }
-            .frame(width: geometry.rect.width, height: geometry.rect.height)
+            .frame(width: frame.width, height: frame.height)
             .overlay {
                 if isSelected || isTarget {
                     SelectionRing(isIdea: node.isIdea, zoom: camera.zoom)
@@ -423,6 +514,8 @@ struct CanvasMapView: View {
                 if !isEditing { NodeMenu(node: node, controller: controller) }
             }
             .gesture(TapGesture().onEnded {
+                // An adding tool clicked on a node adds to that node's Idea.
+                guard !useTool(at: camera.screenPoint(geometry.center, in: size)) else { return }
                 controller.tap(node.id, extending: Self.shiftIsDown)
                 if controller.editingID == nil { mapFocused = true }
             }, including: mask)
@@ -437,7 +530,7 @@ struct CanvasMapView: View {
     /// or only the source while a line is being drawn.
     private var handleIDs: [UUID] {
         if let connect = controller.connect { return [connect.sourceID] }
-        guard controller.editingID == nil, controller.drag == nil, !controller.linkMode else { return [] }
+        guard controller.editingID == nil, controller.drag == nil, controller.tool == .select else { return [] }
         var ids: [UUID] = []
         if let hovered = controller.hoveredNodeID { ids.append(hovered) }
         if let selected = controller.selectedNode?.id, selected != controller.hoveredNodeID { ids.append(selected) }
@@ -493,22 +586,44 @@ struct CanvasMapView: View {
     private func nodeDrag(_ id: UUID) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
             .onChanged { value in
-                controller.dragChanged(id, translation: value.translation, alone: Self.optionIsDown)
+                // With the Hand, dragging a node moves the view, not the node.
+                if controller.tool == .hand {
+                    panStep(to: value.translation)
+                } else {
+                    controller.dragChanged(id, translation: value.translation, alone: Self.optionIsDown)
+                }
             }
-            .onEnded { _ in controller.dragEnded() }
+            .onEnded { _ in
+                lastDrag = .zero
+                controller.dragEnded()
+            }
     }
 
     private var panGesture: some Gesture {
         DragGesture(minimumDistance: 2)
-            .onChanged { value in
-                let delta = CGSize(
-                    width: value.translation.width - lastDrag.width,
-                    height: value.translation.height - lastDrag.height
-                )
-                lastDrag = value.translation
-                controller.pan(by: delta)
-            }
+            .onChanged { value in panStep(to: value.translation) }
             .onEnded { _ in lastDrag = .zero }
+    }
+
+    /// Pans by how far the drag went since the last step.
+    private func panStep(to translation: CGSize) {
+        let delta = CGSize(width: translation.width - lastDrag.width, height: translation.height - lastDrag.height)
+        lastDrag = translation
+        controller.pan(by: delta)
+    }
+
+    /// A click on the Map with an adding tool: the Idea, Note or Text goes there, or the image
+    /// picker opens for there. False when the tool doesn't add (Select, Hand, Link).
+    private func useTool(at location: CGPoint) -> Bool {
+        if let kind = controller.tool.adds {
+            controller.place(kind, at: location)
+            return true
+        }
+        guard controller.tool == .image else { return false }
+        importPoint = location
+        controller.setTool(.select)
+        isImporting = true
+        return true
     }
 
     /// Two fingers on iPhone: zoom around where the pinch started.
@@ -550,6 +665,11 @@ struct CanvasMapView: View {
             controller.showOnMap(controller.selectedNode?.id)
             return .handled
         }
+        if controller.viewMode == .map, plain,
+           let tool = CanvasTool.allCases.first(where: { $0.key == press.key.character && $0 != .link }) {
+            controller.setTool(tool)
+            return .handled
+        }
         switch press.key {
         case .tab where plain:
             controller.addNote()
@@ -564,7 +684,9 @@ struct CanvasMapView: View {
         case .space where plain:
             controller.openDetail()
         case .escape:
-            if controller.linkMode {
+            if controller.tool != .select {
+                controller.setTool(.select)
+            } else if controller.linkMode {
                 controller.toggleLinkMode()
             } else if controller.selection.isEmpty, controller.isFiltering {
                 controller.clearFilters()

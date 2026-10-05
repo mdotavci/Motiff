@@ -199,6 +199,7 @@ jobs:
             canvasgraph \
             "canvas:Product photography look|find=light" \
             "canvas:500 nodes|stress" \
+            "canvas:Product photography look|drawer" \
             "library|shortcuts"
 
       # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with

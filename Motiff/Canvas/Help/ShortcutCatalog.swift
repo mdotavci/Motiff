@@ -161,6 +161,31 @@ enum ShortcutCatalog {
     static let nextSibling = Shortcut("Next at the Same Level", .rightArrow)
     static let copyPrompt = Shortcut("Copy Prompt", "c", [.command, .shift])
 
+    // MARK: Canvas: tools
+
+    static let selectTool = Shortcut("Select Tool", "v")
+    static let handTool = Shortcut("Hand Tool: Drag to Move Around", "h")
+    static let ideaTool = Shortcut("Idea Tool: Click to Place", "o")
+    static let noteTool = Shortcut("Note Tool: Click to Place", "n")
+    static let textTool = Shortcut("Text Tool: Click to Place", "t")
+    static let imageTool = Shortcut("Image Tool: Click Where Images Go", "i")
+    static let noteByDoubleClick = Shortcut("New Note Right There", pointer: "Double-click empty space")
+    static let libraryPanel = Shortcut("Show Library Panel", "l", [.command, .option])
+    static let dragFromLibrary = Shortcut("Put a Reference on the Canvas", pointer: "Drag it from the Library panel")
+    static let addFromLibrary = Shortcut("Put It on the Selected Idea", pointer: "Click it in the Library panel")
+
+    static func tool(_ tool: CanvasTool) -> Shortcut {
+        switch tool {
+        case .select: selectTool
+        case .hand: handTool
+        case .idea: ideaTool
+        case .note: noteTool
+        case .text: textTool
+        case .image: imageTool
+        case .link: linkMode
+        }
+    }
+
     // MARK: Canvas: connecting
 
     static let connect = Shortcut("Put a Node Under Another", pointer: "Drag its handle onto it")
@@ -175,6 +200,10 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
         ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
+        ShortcutSection(title: "Canvas tools", items: [
+            selectTool, handTool, ideaTool, noteTool, textTool, imageTool, noteByDoubleClick,
+            libraryPanel, dragFromLibrary, addFromLibrary,
+        ]),
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector, nodeMenu,

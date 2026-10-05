@@ -18,6 +18,7 @@ import AppKit
 ///     -MotiffFind <text>         on a Canvas, opens the find bar with that text
 ///     -MotiffStress YES          makes the 500-node Canvas first
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
+///     -MotiffDrawer YES          on a Canvas, opens the Library panel
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
 enum DebugLaunchRoute {
@@ -59,6 +60,10 @@ enum DebugLaunchRoute {
 
     static var showsDetail: Bool {
         UserDefaults.standard.bool(forKey: "MotiffDetail")
+    }
+
+    static var showsDrawer: Bool {
+        UserDefaults.standard.bool(forKey: "MotiffDrawer")
     }
 
     static var showsShortcuts: Bool {

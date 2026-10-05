@@ -12,6 +12,8 @@ enum NodeKind: String, Codable, CaseIterable {
     case note
     /// A URL with its title and favicon.
     case link
+    /// Free text straight on the Canvas, no card around it: headings, labels, comments.
+    case text
 
     var label: String {
         switch self {
@@ -20,8 +22,37 @@ enum NodeKind: String, Codable, CaseIterable {
         case .prompt: "Prompt"
         case .note: "Note"
         case .link: "Link"
+        case .text: "Text"
         }
     }
+}
+
+/// How big a Text node's letters are.
+enum TextSize: Int, CaseIterable, Identifiable, Sendable {
+    case small, medium, large, huge
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        case .huge: "Huge"
+        }
+    }
+
+    /// In canvas points at 100% zoom.
+    var fontSize: Double {
+        switch self {
+        case .small: 14
+        case .medium: 20
+        case .large: 32
+        case .huge: 48
+        }
+    }
+
+    var isBold: Bool { self == .large || self == .huge }
 }
 
 /// The two kinds of edge on a Canvas.

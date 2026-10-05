@@ -175,6 +175,9 @@ private struct OutlineIcon: View {
             case .link:
                 Image(systemName: "link")
                     .foregroundStyle(node.category?.color ?? Color.secondary)
+            case .text:
+                Image(systemName: "textformat")
+                    .foregroundStyle(node.category?.color ?? Color.secondary)
             }
         }
         .font(.system(size: 12))

@@ -14,6 +14,8 @@ struct NodeView: View {
     var body: some View {
         if node.isIdea {
             IdeaNodeView(node: node, diameter: size.width, editor: editor)
+        } else if node.kind == .text {
+            TextNodeView(node: node, editor: editor)
         } else {
             CardView(node: node, size: size, zoom: zoom, editor: editor, isPlaying: isPlaying)
         }
@@ -115,9 +117,33 @@ struct CardView: View {
             }
         case .link:
             LinkCardContent(title: node.displayTitle, url: node.url, iconFilename: node.iconFilename, editor: editor, nodeID: node.id)
-        case .idea:
+        case .idea, .text:
             EmptyView()
         }
+    }
+}
+
+/// Free text on the Canvas: just the letters, no card. Big sizes are bold, for headings.
+struct TextNodeView: View {
+    let node: CanvasNode
+    var editor: CanvasController?
+
+    var body: some View {
+        let size = node.textSize
+        Group {
+            if let editor {
+                InlineEditor(controller: editor, nodeID: node.id, prompt: "Text", axis: .vertical)
+            } else {
+                Text(node.body ?? "")
+            }
+        }
+        .font(.system(size: size.fontSize, weight: size.isBold ? .bold : .regular))
+        .foregroundStyle(.primary)
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Text: \(node.displayTitle)")
     }
 }
 
