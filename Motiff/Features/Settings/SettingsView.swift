@@ -4,11 +4,14 @@ import AppKit
 #endif
 
 struct SettingsView: View {
+    /// What Copy and Export for AI put first.
+    @AppStorage(AIPack.instructionKey) private var instruction = ""
+
     var body: some View {
         #if os(macOS)
         form
             .formStyle(.grouped)
-            .frame(width: 480, height: 200)
+            .frame(width: 480, height: 360)
         #else
         NavigationStack {
             form.navigationTitle("Settings")
@@ -18,6 +21,14 @@ struct SettingsView: View {
 
     private var form: some View {
         Form {
+            Section {
+                TextField("Say this first", text: $instruction, prompt: Text("You are my creative director. Here's my board for a new campaign…"), axis: .vertical)
+                    .lineLimit(2...5)
+            } header: {
+                Text("AI pack")
+            } footer: {
+                Text("Copy for AI and Export for AI start with this, then the board: its ideas, prompts with their models and settings, notes and numbered pictures.")
+            }
             Section {
                 #if os(macOS)
                 LabeledContent("Library") {

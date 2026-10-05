@@ -10,8 +10,8 @@ its own shell (window layout, navigation) and its own capture methods.
 |---|---|---|
 | Project | XcodeGen (`project.yml`) | The spec is plain text, easy to review and regenerate. |
 | Targets | `MotiffMac` (macOS 15+), `Motiff` (iOS 18+), `MotiffShare` (iOS) | These are native targets, not Catalyst. The Mac app gets a real sidebar, windows, menus and keyboard shortcuts. |
-| Mac shell | `NavigationSplitView` (Inbox / Library / Boards sidebar), Settings window on ⌘, | This is the standard Mac layout. |
-| iPhone shell | `TabView` (Inbox / Library / Boards / Settings) and a floating capture button | As in the brief. |
+| Mac shell | `NavigationSplitView` (Inbox / Library / Board Graph, then the Boards), Settings window on ⌘, | This is the standard Mac layout. |
+| iPhone shell | `TabView` (Inbox / Library / Boards / Settings) and a floating capture button. Boards are the freeform boards (Round 3) | As in the brief. |
 | Mac storage | The sandbox container (`~/Library/Containers/com.mdotavci.motiff/…`) | The library moves into an App Group when the Mac Share Extension arrives. That step needs a Team ID. |
 | iOS storage | App Group `group.com.mdotavci.motiff` | Shared with the Share Extension. |
 | Share Extension → app | A drop folder (`Incoming/`) that the app imports from | Keeps the extension small and gives the database a single writer. |
@@ -26,16 +26,82 @@ its own shell (window layout, navigation) and its own capture methods.
 
 0. Skeleton: Mac target, sidebar, Settings window, CI launch check. *(done)*
 1. Data layer, media storage, and 12 seed References (shared code) *(done)*
-2. Library masonry grid: columns adapt to the window width, ⌘+ / ⌘− change density, F/G/M/R letters, context menu
-3. Reference detail: large media, then Recipe, Read, Why, Source and Lineage. GIF/video loops muted.
-4. Capture on the Mac: drag and drop from Finder or a browser, paste (⌘V image and prompt text), File › Import (⌘O). A Why popover after saving.
+2. Library masonry grid: columns adapt to the window width, ⌘+ / ⌘− change density, F/G/M/R letters, context menu *(done)*
+3. Reference detail: large media, then Recipe, Read, Why, Source and Lineage. GIF/video loops muted. *(done)*
+4. Capture on the Mac: drag and drop from Finder or a browser, paste (⌘V image and prompt text), File › Import (⌘O). A Why popover after saving. *(done, with Canvas step 6)*
 5. Mac Share Extension (Safari and other apps' Share menu). Needs your Team ID for the App Group.
 6. On-device analysis: OCR, feature print, colors
 7. Claude: tags on save, "Describe as prompt", API key in the Keychain
-8. Recipe editor: inline parts, live prompt, copy. Saving an edit creates a Remix.
+8. Recipe editor: inline parts, live prompt, copy. Edits change the Reference in place (⌘Z undoes); "Save as Remix" is a separate, explicit action.
 9. Search: text search plus filter chips (origin, type, color), and "More like this"
-10. Boards: create, rename, add and remove References. A Reference can be on many Boards.
+10. Boards: create, rename, add and remove References. A Reference can be on many Boards. *(replaced in Round 3: boards are the freeform Canvases)*
 11. Inbox: saves from the last 7 days that haven't been opened
+
+## Phase 1b — Canvas (idea map)
+
+A second way to see the same References: Ideas as circles, cards around them, links between
+anything. Design: the "Motiff Canvas" design canvas (Map, anatomy, palette, detail, Outline,
+Graph, iPhone). Code lives in `Motiff/Canvas/`.
+
+| Area | Choice | Why |
+|---|---|---|
+| Belongs to | `CanvasNode.parent` only; `CanvasLink` stores "relates to" | One record per edge, so hierarchy and lines can't drift |
+| Prompt cards | `NodeKind.prompt`: a Reference drawn prompt first | The same Reference can be a picture on one Canvas and a prompt on another |
+| No-media prompts | Text/Code prompts keep an empty `mediaFilename` and draw a typographic cover | Never blank; the cover takes the category color, which is per Canvas |
+| Colors | A 16-swatch pastel palette (fill + ink per swatch) plus a free Custom… color, for categories and for any node, text, line or arrow. No pure red in the palette | You asked for nicer colors and to recolor everything; the selection ring stays the only red |
+| Changes | Only through `CanvasGraph` | The rules (no cycles, one link per pair, children move up on delete) live in one place |
+| Tests | `MotiffTests`, model layer only, no host app | Run in CI on every push |
+| Placement | New nodes take the first free spot on rings around their Idea; nothing is ever re-laid out | Positions you dragged to stay put |
+| Moving | Dragging an Idea brings everything under it; ⌥-drag moves just the Idea | A branch moves as one, like a mind map |
+| Keys | Tab, Return, ⌫ and Esc are handled by the Map, not the menus; ⌘ shortcuts are menu items. All of them are in `ShortcutCatalog`, which the ⌘/ sheet lists | Plain-key menu shortcuts would steal those keys from text fields |
+| Connecting | Drag a node's handle onto another: it belongs to that one; ⌥-drag or L mode links them. Right-click a line to label, convert or delete it | Belonging is the common case, so it gets the plain gesture |
+| Detail | The open node is an overlay on the Map that grows out of the node and shrinks back; the Map underneath never changes. References use the same detail the Library does (`ReferenceDetailContent`), plus Connections | Esc finds the Canvas exactly as it was |
+| Capture | `Capture/CaptureService` for both Library and Canvas: files are copied into Media, image addresses downloaded, other pages become Link cards (title and icon via LinkPresentation), text becomes a prompt with a guessed purpose. Media is Found; pasted prompts are Mine | One path in, so the Library and the Canvas can't drift |
+| Filters | The legend's category and purpose chips dim everything else (never hide it); 1–9 give the selection a category, 0 removes it | The map keeps its shape while you look at one part of it |
+| Views | Map, Outline and Graph are three views of one Canvas sharing the selection, inspector, detail and keys (⌘1 ⌘2 ⌘3). The Outline restructures (Tab, ⇧Tab, ⌥⌘↑↓); the Graph is a force layout seeded from Map positions, computed off the main actor | One model, three lenses; nothing is copied |
+| Far zoom | Below 45% the Map draws every node in one `Canvas` pass (blocks and circles, titles when they fit) and keeps only invisible hit views | Hundreds of nodes without hundreds of card views and thumbnails |
+| Palette | ⌘K ranks actions, Canvases, every node on every Canvas, and Library References by fuzzy match; it drives the open Canvas through a `CanvasRequest` | One place to go anywhere |
+| Undo | SwiftData's context uses the window's undo manager; a drag is one step; looking around (the viewport) isn't recorded | ⌘Z undoes edits, not panning |
+| iPhone Canvas | Same `CanvasMapView` and controller as the Mac, opening in the Outline. One menu per node (long-press on iPhone, right-click on the Mac) carries the actions keys do on the Mac; detail and inspector are sheets; the legend scrolls sideways | One Canvas codebase; a phone gets menus where a Mac gets keys |
+
+1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
+2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom *(done)*
+3. Create and edit: root Idea, Tab / ⌘Return, drag to move, auto-placement, undo, inspector, shortcuts sheet (⌘/) *(done)*
+4. Linking: handles, drag to link, link types, labels, selection highlight *(done)*
+5. Detail view from the Map, Esc back, sibling navigation, Connections *(done)*
+6. Drag and paste onto the Map (shares capture with step 4 above) *(done)*
+7. Category legend and filters; purpose filter in the Canvas and the Library *(done)*
+8. Outline view, Graph view, cross-canvas graph *(done)*
+9. ⌘K palette, search, minimap, semantic zoom, performance pass *(done; 60 fps to be checked on the M1)*
+10. iPhone: Canvases tab, Outline first, touch Map *(done)*
+
+### Round 2 — after first use
+
+11. Adding things: tool bar (V H O N T I L), double-click for a Note, free Text nodes, Library panel (⌥⌘L) to drag References in; iPhone + menu with Photos
+12. Boards: create, rename, delete; drop or drag References onto them
+13. Colors: pastel palette, color any node, text, line or arrow; arrowheads; selectable lines
+14. Detail page: everything editable, a markdown editor with a formatting bar, add images and notes from it
+
+### Round 3 — direction: an inspiration board and prompt library you take to any AI
+
+Motiff is a place to collect ideas, example images and example prompts on boards, laid out like a
+moodboard and connected like a mind map when you want, and then to take a board to whichever AI
+you work with. This replaces the Phase 1b framing of the Canvas as "a second way to see the
+References" and the image-grid Boards.
+
+| Area | Choice | Why |
+|---|---|---|
+| Boards | One kind of board: the Canvas, called **Board** everywhere in the app (the model keeps the name `Canvas`). The old grid Boards are turned into boards once (`boards.v3`) and their screens are gone; the `Board` model stays in the schema, unused | One place for pictures, prompts and notes; no schema rename |
+| Layout | Freeform first: tools, paste and drop put things where you are, loose; links and sub-ideas are optional. Only Tab / ⌘Return still place on rings around an Idea | A moodboard, with mind-map structure when you want it |
+| Library → board | Right-click › Add to Board ▸, or drag a tile onto a board in the sidebar: a card beside what's there, never twice | The Library stays the prompt and reference library |
+| Taking it to an AI | A copy-and-share pack (markdown + numbered images), no API key, no new dependency. In-app AI chat and MCP are not in this round | Works with any AI today |
+
+15. One Board: Canvas ⇢ Board everywhere, old Boards migrated, Add to Board, freeform placement *(done)*
+16. Bottom tool bar (Mac and iPhone): select, hand, sticky, note, text, prompt, image, shapes, arrow, idea, Library *(done)*
+17. Resize and style everything: handles, text size for anything with words, fill, border, line width, dashes, arrowheads; plain pictures *(done)*
+18. Paste anywhere: at the pointer, onto the selected item, into an open note or prompt; screenshots; iPhone Paste button *(done)*
+19. Prompts and notes hold more: edit prompts on the board, model and parameters, your own fields, variants, example images
+20. Take a board to an AI: Copy for AI, Export for AI (markdown + images), Share; selection only
 
 ## Phase 2 — iPhone
 
