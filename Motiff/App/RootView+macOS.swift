@@ -69,56 +69,8 @@ struct RootView: View {
                     Label(item.title, systemImage: item.systemImage)
                         .tag(item.selection)
                 }
-                Section {
-                    ForEach(boards) { board in
-                        Label(board.displayName, systemImage: "rectangle.stack")
-                            .tag(SidebarSelection.board(board.id))
-                            .contextMenu {
-                                Button("Rename…") {
-                                    draftTitle = board.name
-                                    renamingBoard = board
-                                }
-                                Divider()
-                                Button("Delete…", role: .destructive) { pendingBoardDelete = board }
-                            }
-                            // References dragged from the Library (or a Board) land on this Board.
-                            .dropDestination(for: String.self) { items, _ in
-                                add(items, to: board)
-                            }
-                    }
-                } header: {
-                    HStack {
-                        Text("Boards")
-                        Spacer()
-                        Button("New Board", systemImage: "plus", action: newBoard)
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderless)
-                            .help("New Board (\(ShortcutCatalog.newBoard.keys))")
-                    }
-                }
-                Section {
-                    ForEach(canvases) { canvas in
-                        Label(canvas.displayTitle, systemImage: "point.3.connected.trianglepath.dotted")
-                            .tag(SidebarSelection.canvas(canvas.id))
-                            .contextMenu {
-                                Button("Rename…") {
-                                    draftTitle = canvas.title
-                                    renaming = canvas
-                                }
-                                Divider()
-                                Button("Delete…", role: .destructive) { pendingDelete = canvas }
-                            }
-                    }
-                } header: {
-                    HStack {
-                        Text("Canvases")
-                        Spacer()
-                        Button("New Canvas", systemImage: "plus", action: newCanvas)
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderless)
-                            .help("New Canvas (\(ShortcutCatalog.newCanvas.keys))")
-                    }
-                }
+                boardsSection
+                canvasesSection
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
@@ -187,6 +139,56 @@ struct RootView: View {
         #if DEBUG
         .task { await applyLaunchRoute() }
         #endif
+    }
+
+    private var boardsSection: some View {
+        Section {
+            ForEach(boards) { board in
+                boardRow(board)
+            }
+        } header: {
+            SidebarHeader(title: "Boards", add: "New Board", shortcut: ShortcutCatalog.newBoard, action: newBoard)
+        }
+    }
+
+    private func boardRow(_ board: Board) -> some View {
+        Label(board.displayName, systemImage: "rectangle.stack")
+            .tag(SidebarSelection.board(board.id))
+            .contextMenu {
+                Button("Rename…") {
+                    draftTitle = board.name
+                    renamingBoard = board
+                }
+                Divider()
+                Button("Delete…", role: .destructive) { pendingBoardDelete = board }
+            }
+            // References dragged from the Library (or a Board) land on this Board.
+            .dropDestination(for: String.self) { (items: [String], _: CGPoint) -> Bool in
+                add(items, to: board)
+            }
+    }
+
+    private var canvasesSection: some View {
+        Section {
+            ForEach(canvases) { canvas in
+                canvasRow(canvas)
+            }
+        } header: {
+            SidebarHeader(title: "Canvases", add: "New Canvas", shortcut: ShortcutCatalog.newCanvas, action: newCanvas)
+        }
+    }
+
+    private func canvasRow(_ canvas: Canvas) -> some View {
+        Label(canvas.displayTitle, systemImage: "point.3.connected.trianglepath.dotted")
+            .tag(SidebarSelection.canvas(canvas.id))
+            .contextMenu {
+                Button("Rename…") {
+                    draftTitle = canvas.title
+                    renaming = canvas
+                }
+                Divider()
+                Button("Delete…", role: .destructive) { pendingDelete = canvas }
+            }
     }
 
     @ViewBuilder
@@ -326,6 +328,25 @@ struct RootView: View {
         }
     }
     #endif
+}
+
+/// A sidebar section's title with its + button.
+private struct SidebarHeader: View {
+    let title: String
+    let add: String
+    let shortcut: Shortcut
+    let action: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button(add, systemImage: "plus", action: action)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("\(add) (\(shortcut.keys))")
+        }
+    }
 }
 
 #Preview {
