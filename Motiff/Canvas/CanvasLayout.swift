@@ -12,6 +12,9 @@ enum CanvasLayout {
     static let promptSize = CGSize(width: 196, height: 262)
     static let noteSize = CGSize(width: 224, height: 112)
     static let linkSize = CGSize(width: 224, height: 72)
+    static let stickySize = CGSize(width: 200, height: 200)
+    /// Room around an arrow or line for its arrowheads and for clicking it.
+    static let linePadding: CGFloat = 12
 
     /// Below this zoom the Map draws plain colored blocks instead of cards.
     static let blockZoom: CGFloat = 0.45
@@ -23,15 +26,21 @@ enum CanvasLayout {
 
     /// - Parameters:
     ///   - heightOverWidth: the Reference's media shape, for Reference cards.
-    ///   - override: a size the user dragged to; wins when set.
+    ///   - override: a size the user dragged to; wins when set (not for arrows and lines).
+    ///   - line: an arrow's or line's run from start to end.
     static func size(
         kind: NodeKind,
         ideaLevel: Int,
         heightOverWidth: CGFloat,
         override: CGSize? = nil,
         text: String = "",
-        textSize: TextSize = .medium
+        textSize: TextSize = .medium,
+        shape: ShapeKind = .rectangle,
+        line: CGVector = .zero
     ) -> CGSize {
+        if kind == .shape, shape.isLine {
+            return CGSize(width: abs(line.dx) + linePadding * 2, height: abs(line.dy) + linePadding * 2)
+        }
         if let override { return override }
         switch kind {
         case .idea:
@@ -48,6 +57,21 @@ enum CanvasLayout {
             return linkSize
         case .text:
             return textBox(for: text, size: textSize)
+        case .sticky:
+            return stickySize
+        case .shape:
+            return shapeSize(shape)
+        }
+    }
+
+    /// A new shape's size.
+    static func shapeSize(_ shape: ShapeKind) -> CGSize {
+        switch shape {
+        case .rectangle: CGSize(width: 180, height: 120)
+        case .ellipse: CGSize(width: 140, height: 140)
+        case .triangle: CGSize(width: 160, height: 140)
+        case .diamond, .star: CGSize(width: 160, height: 160)
+        case .arrow, .line: CGSize(width: linePadding * 2, height: linePadding * 2)
         }
     }
 
@@ -80,7 +104,9 @@ enum CanvasLayout {
             heightOverWidth: node.reference?.displayAspectRatio ?? 1.25,
             override: override,
             text: node.kind == .text ? node.body ?? "" : "",
-            textSize: node.textSize
+            textSize: node.textSize,
+            shape: node.shape,
+            line: node.line
         )
     }
 }

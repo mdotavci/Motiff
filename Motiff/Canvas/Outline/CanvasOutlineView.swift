@@ -178,6 +178,13 @@ private struct OutlineIcon: View {
             case .text:
                 Image(systemName: "textformat")
                     .foregroundStyle(node.category?.color ?? Color.secondary)
+            case .sticky:
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Palette.fill(node.effectiveColorHex ?? StickyNodeView.defaultHex) ?? .yellow)
+                    .frame(width: 13, height: 13)
+            case .shape:
+                Image(systemName: node.shape.systemImage)
+                    .foregroundStyle(node.effectiveColorHex.map(Palette.ink) ?? Color.secondary)
             }
         }
         .font(.system(size: 12))

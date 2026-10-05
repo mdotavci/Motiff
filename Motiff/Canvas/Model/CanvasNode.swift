@@ -2,7 +2,8 @@ import CoreGraphics
 import Foundation
 import SwiftData
 
-/// One thing on a Canvas: an Idea circle, or a Reference, Prompt, Note or Link card.
+/// One thing on a board: an Idea circle; a Reference, Prompt, Note or Link card; or Text, a
+/// Sticky or a Shape drawn straight on the board.
 ///
 /// "Belongs to" is `parent`, and only `CanvasGraph` changes it. "Relates to" links are
 /// `CanvasLink`s in `outgoing` / `incoming`.
@@ -35,6 +36,14 @@ final class CanvasNode {
     var iconFilename: String?
     /// Text: its `TextSize`; nil is medium.
     var textSizeRaw: Int?
+    /// Shapes: the `ShapeKind`.
+    var shapeRaw: String?
+    /// Arrows and lines: from their start to their end, in canvas points. The node's position
+    /// is the line's middle.
+    var lineDX: Double?
+    var lineDY: Double?
+    /// Arrows and lines: an arrowhead at the start too.
+    var hasStartArrow: Bool = false
 
     // MARK: Look
 
@@ -81,6 +90,24 @@ extension CanvasNode {
     /// The color it's drawn in: its own, or its category's.
     var effectiveColorHex: String? {
         colorHex ?? category?.colorHex
+    }
+
+    /// A `.shape` node's shape; rectangle if it's missing.
+    var shape: ShapeKind {
+        get { shapeRaw.flatMap(ShapeKind.init(rawValue:)) ?? .rectangle }
+        set { shapeRaw = newValue.rawValue }
+    }
+
+    /// An arrow or a line: drawn from point to point, not in a box.
+    var isLine: Bool { kind == .shape && shape.isLine }
+
+    /// For arrows and lines: from start to end.
+    var line: CGVector {
+        get { CGVector(dx: lineDX ?? 0, dy: lineDY ?? 0) }
+        set {
+            lineDX = Double(newValue.dx)
+            lineDY = Double(newValue.dy)
+        }
     }
 
     var textSize: TextSize {
@@ -141,6 +168,10 @@ extension CanvasNode {
             return nonEmpty(body.map(Self.firstLine)) ?? "Empty text"
         case .link:
             return nonEmpty(title) ?? nonEmpty(urlString) ?? "Link"
+        case .sticky:
+            return nonEmpty(body.map(Self.firstLine)) ?? "Empty sticky"
+        case .shape:
+            return nonEmpty(body.map(Self.firstLine)) ?? shape.label
         case .reference, .prompt:
             return reference?.caption ?? "Missing reference"
         }

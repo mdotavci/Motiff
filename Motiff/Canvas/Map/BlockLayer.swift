@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Far out (below `CanvasLayout.blockZoom`), every node drawn in one pass instead of as views:
-/// cards as blocks in their category color, Ideas as flat circles, titles once there's room.
+/// cards as blocks in their category color, Ideas as flat circles, shapes as their outline,
+/// arrows as plain lines, titles once there's room.
 /// No thumbnails, so a Canvas of hundreds of nodes stays smooth.
 struct BlockLayer: View {
     let nodes: [CanvasSnapshot.Node]
@@ -21,9 +22,17 @@ struct BlockLayer: View {
                 var layer = context
                 if let highlighted, !highlighted.contains(node.id) { layer.opacity = 0.3 }
 
-                if node.kind == .idea {
+                if node.isLine {
+                    var line = Path()
+                    line.move(to: camera.screenPoint(node.lineStart, in: size))
+                    line.addLine(to: camera.screenPoint(node.lineEnd, in: size))
+                    layer.stroke(line, with: .color(hex?.color ?? Color.primary.opacity(0.6)), lineWidth: 1.5)
+                    continue
+                } else if node.kind == .idea {
                     let circle = Path(ellipseIn: rect)
                     layer.fill(circle, with: .color(hex?.color ?? Theme.neutralIdea))
+                } else if let shape = node.shape {
+                    layer.fill(BoxShape(kind: shape).path(in: rect), with: .color(hex?.color ?? Theme.neutralIdea))
                 } else {
                     let block = Path(roundedRect: rect, cornerRadius: max(Theme.cardCorner * camera.zoom, 2))
                     if let hex {

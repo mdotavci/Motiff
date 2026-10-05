@@ -4,14 +4,15 @@ import SwiftData
 
 /// Twelve References so the app is never opened to an empty grid, created once, the first
 /// time the SwiftData store has none. All media is generated placeholder art — no image
-/// assets are shipped. Then one example board built from them (`SeedData+Canvas.swift`). The two
-/// old-style Boards it makes are turned into boards by `migrateBoardsIfNeeded`, as a library
-/// from before boards were merged would be.
+/// assets are shipped. Then two example boards built from them (`SeedData+Canvas.swift`,
+/// `SeedData+Moodboard.swift`). The two old-style Boards it makes are turned into boards by
+/// `migrateBoardsIfNeeded`, as a library from before boards were merged would be.
 enum SeedData {
     @MainActor
     static func seedIfNeeded(context: ModelContext) {
         seedReferencesIfNeeded(context: context)
         seedCanvasIfNeeded(context: context)
+        seedMoodboardIfNeeded(context: context)
         migratePaletteIfNeeded(context: context)
         migrateBoardsIfNeeded(context: context)
     }

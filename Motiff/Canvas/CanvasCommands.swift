@@ -60,7 +60,7 @@ extension FocusedValues {
 /// File › New Board (⌘N), which replaces New Window (Motiff is a single-window app), Import…,
 /// the Board menu, and Help › Keyboard Shortcuts (⌘/).
 ///
-/// Tab, Return, Space, the tool letters (V H O N T I L), ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
+/// Tab, Return, Space, the tool letters (V H S N T P I R A O), ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
 /// take those keys away from every text field. Their menu items show no key; the help sheet
 /// lists them.
 struct CanvasCommands: Commands {
@@ -148,7 +148,7 @@ struct CanvasCommands: Commands {
             Button("Delete With Everything Under It") { editing?.deleteBranch() }
                 .disabled(editing?.hasSelection != true)
             Divider()
-            Button(editing?.linkMode == true ? "Stop Link Mode" : ShortcutCatalog.linkMode.title) {
+            Button(editing?.linkMode == true ? "Put the Arrow Down" : ShortcutCatalog.linkMode.title) {
                 editing?.toggleLinkMode()
             }
             .disabled(editing == nil)

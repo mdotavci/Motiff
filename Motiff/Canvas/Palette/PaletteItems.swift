@@ -61,7 +61,7 @@ enum PaletteItems {
 
         var onOpenCanvas: Set<UUID> = []
         for canvas in sources.canvases {
-            for node in canvas.nodes where !node.isDeleted && !node.isRoot {
+            for node in canvas.nodes where !node.isDeleted && !node.isRoot && !node.isLine {
                 if canvas.id == sources.openCanvasID, let reference = node.reference { onOpenCanvas.insert(reference.id) }
                 let canvasID = canvas.id
                 let nodeID = node.id
@@ -89,6 +89,8 @@ enum PaletteItems {
         case .note: "text.alignleft"
         case .link: "link"
         case .text: "textformat"
+        case .sticky: "note"
+        case .shape: "square.on.circle"
         }
     }
 }

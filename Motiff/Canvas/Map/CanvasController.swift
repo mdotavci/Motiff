@@ -47,6 +47,14 @@ final class CanvasController {
         var isLink: Bool
     }
 
+    /// A free arrow being drawn with the Arrow tool on empty board, in canvas points.
+    private(set) var arrowDraft: ArrowDraft?
+
+    struct ArrowDraft: Equatable {
+        var start: CGPoint
+        var end: CGPoint
+    }
+
     /// What's open full size over the Map, last on top: nodes of this Canvas, or a Reference
     /// reached from one (a Remix) that isn't on it. Esc goes back one; empty shows the Map.
     private(set) var detailPath: [DetailItem] = []
@@ -90,13 +98,16 @@ final class CanvasController {
     /// The node under something being dragged in from outside; dropping attaches to its Idea.
     private(set) var dropTargetID: UUID?
 
-    /// L: click two nodes to link them. `linkSourceID` is the first one clicked.
+    /// The Arrow tool (A, or L): click two nodes to link them. `linkSourceID` is the first one clicked.
     private(set) var linkMode = false
     private(set) var linkSourceID: UUID?
 
-    /// What a click on the Map does: select (V), pan (H), or add an Idea, Note, Text or image
-    /// there (O N T I). Link (L) is link mode. Adding tools go back to Select once used.
+    /// What a click on the board does: select (V), pan (H), or put something there: a sticky,
+    /// note, text, prompt, image, shape or Idea (S N T P I R O). The Arrow (A) links what you
+    /// click or drag between, or draws a free arrow. Adding tools go back to Select once used.
     private(set) var tool: CanvasTool = .select
+    /// The shape the Shape tool (R) places; the bar remembers the last one picked.
+    private(set) var shapeTool: ShapeKind = .rectangle
     /// ⌥⌘L: the Library panel beside the Map, to drag References in from.
     var showsLibrary = false
 
@@ -581,11 +592,18 @@ final class CanvasController {
 
     func setTool(_ new: CanvasTool) {
         endEditing()
-        if (new == .link) != linkMode {
+        if (new == .arrow) != linkMode {
             linkMode.toggle()
             linkSourceID = nil
         }
+        arrowDraft = nil
         tool = new
+    }
+
+    /// The bar's shape menu: that shape, and the Shape tool picked.
+    func setShapeTool(_ shape: ShapeKind) {
+        shapeTool = shape
+        setTool(.shape)
     }
 
     /// The node under a point in the view, if any.
@@ -593,19 +611,64 @@ final class CanvasController {
         snapshot.node(at: camera.canvasPoint(viewPoint, in: viewSize))?.id
     }
 
-    /// The Idea, Note and Text tools (and double-click): a new one where the Map was clicked,
-    /// typed into. On an Idea, or one of its cards, it belongs to that Idea and takes a free spot
-    /// around it; on empty space it stays loose, right there. The tool goes back to Select.
+    /// The Sticky, Note, Text, Shape and Idea tools (and double-click): a new one loose, right
+    /// where the board was clicked, typed into. The tool goes back to Select.
     func place(_ kind: NodeKind, at viewPoint: CGPoint) {
         endEditing()
         guard let context else { return }
         let point = camera.canvasPoint(viewPoint, in: viewSize)
-        let target = snapshot.node(at: point).flatMap { self.node($0.id) }
-        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
-        let node = CanvasGraph.addNode(kind, to: canvas, parent: idea, at: point, body: kind == .idea ? nil : "", in: context)
-        if let idea { node.position = CanvasGraph.freeSpot(for: node, around: idea) }
+        let node: CanvasNode = switch kind {
+        case .sticky: CanvasGraph.addSticky(to: canvas, at: point, in: context)
+        case .shape: CanvasGraph.addShape(shapeTool, to: canvas, at: point, in: context)
+        default: CanvasGraph.addNode(kind, to: canvas, at: point, body: kind == .idea ? nil : "", in: context)
+        }
         if tool != .select { setTool(.select) }
         finishAdding(node)
+    }
+
+    /// The Prompt tool: a new prompt (a Reference in the Library, with no picture yet) where the
+    /// board was clicked, opened full size to write it.
+    func placePrompt(at viewPoint: CGPoint) {
+        endEditing()
+        guard let context else { return }
+        let point = camera.canvasPoint(viewPoint, in: viewSize)
+        let reference = Reference(mediaFilename: "", mediaType: .image, width: 0, height: 0, origin: .mine)
+        context.insert(reference)
+        reference.promptRaw = ""
+        reference.aiState = .done
+        let node = CanvasGraph.addNode(.prompt, to: canvas, at: point, reference: reference, in: context)
+        if tool != .select { setTool(.select) }
+        save()
+        reload()
+        selection = [node.id]
+        openDetail(node.id)
+    }
+
+    // MARK: Free arrows
+
+    /// The Arrow tool dragged on empty board: the arrow follows the pointer.
+    func arrowDragChanged(from viewStart: CGPoint, to viewPoint: CGPoint) {
+        if arrowDraft == nil { endEditing() }
+        arrowDraft = ArrowDraft(
+            start: camera.canvasPoint(viewStart, in: viewSize),
+            end: camera.canvasPoint(viewPoint, in: viewSize)
+        )
+    }
+
+    /// Lets go of a free arrow: it stays, unless it's too short to be meant. Back to Select.
+    func arrowDragEnded() {
+        guard let draft = arrowDraft else { return }
+        arrowDraft = nil
+        addFreeArrow(from: draft.start, to: draft.end)
+    }
+
+    private func addFreeArrow(from start: CGPoint, to end: CGPoint) {
+        guard let context, hypot(end.x - start.x, end.y - start.y) * camera.zoom >= 12 else { return }
+        let node = CanvasGraph.addLine(from: start, to: end, on: canvas, in: context)
+        setTool(.select)
+        save()
+        reload()
+        selection = [node.id]
     }
 
     func toggleLibrary() {
@@ -631,7 +694,11 @@ final class CanvasController {
         switch node.kind {
         case .idea, .link:
             editDraft = node.title ?? ""
-        case .note, .text:
+        case .note, .text, .sticky:
+            editDraft = node.body ?? ""
+        case .shape:
+            // Arrows and lines have no words.
+            guard !node.isLine else { return }
             editDraft = node.body ?? ""
         case .reference, .prompt:
             openDetail(id)
@@ -662,7 +729,7 @@ final class CanvasController {
                 if text != (node.title ?? "") { CanvasGraph.rename(node, to: text) }
             case .link:
                 if text != (node.title ?? "") { CanvasGraph.edit(node) { $0.title = text.isEmpty ? nil : text } }
-            case .note, .text:
+            case .note, .text, .sticky, .shape:
                 if text != (node.body ?? "") { CanvasGraph.edit(node) { $0.body = text } }
             case .reference, .prompt:
                 break
@@ -725,16 +792,23 @@ final class CanvasController {
     func connectChanged(from sourceID: UUID, at viewPoint: CGPoint, isLink: Bool) {
         if connect == nil { endEditing() }
         let point = camera.canvasPoint(viewPoint, in: viewSize)
-        let target = snapshot.node(at: point).map(\.id)
+        // Arrows and lines aren't things to connect to.
+        let target = snapshot.node(at: point).flatMap { $0.isLine ? nil : $0.id }
         connect = Connect(sourceID: sourceID, point: point, targetID: target == sourceID ? nil : target, isLink: isLink)
     }
 
-    /// Drops the line: the dragged node belongs to the target, or with ⌥ they're linked.
-    /// Anything the rules refuse (a cycle, a duplicate) beeps and changes nothing.
+    /// Drops the line: the dragged node belongs to the target, or with ⌥ (or the Arrow tool)
+    /// they're linked. With the Arrow tool, letting go on empty board leaves a free arrow from
+    /// the node to there. Anything the rules refuse (a cycle, a duplicate) beeps and changes nothing.
     func connectEnded() {
         guard let connect else { return }
         self.connect = nil
-        guard let targetID = connect.targetID else { return }
+        guard let targetID = connect.targetID else {
+            if tool == .arrow, let source = snapshot.node(connect.sourceID) {
+                addFreeArrow(from: source.edgePoint(toward: connect.point), to: connect.point)
+            }
+            return
+        }
         if connect.isLink {
             makeLink(from: connect.sourceID, to: targetID)
         } else if let context, let source = node(connect.sourceID), let target = node(targetID) {
@@ -752,7 +826,8 @@ final class CanvasController {
         endEditing()
         linkMode.toggle()
         linkSourceID = nil
-        tool = linkMode ? .link : .select
+        arrowDraft = nil
+        tool = linkMode ? .arrow : .select
     }
 
     func setTextSize(_ size: TextSize, of id: UUID) {
@@ -764,13 +839,17 @@ final class CanvasController {
     func startLink(from id: UUID) {
         endEditing()
         linkMode = true
-        tool = .link
+        tool = .arrow
         linkSourceID = id
         selection = [id]
     }
 
     private func makeLink(from sourceID: UUID, to targetID: UUID) {
         guard let context, let source = node(sourceID), let target = node(targetID) else { return }
+        guard !source.isLine, !target.isLine else {
+            Self.refuse()
+            return
+        }
         if CanvasGraph.link(source, to: target, in: context) != nil {
             save()
             reload()
@@ -1034,11 +1113,11 @@ final class CanvasController {
 
     // MARK: Graph
 
-    /// The Canvas as dots and lines: Ideas bigger and labeled, cards small, seeded from where
-    /// they are on the Map.
+    /// The board as dots and lines: Ideas bigger and labeled, cards small, seeded from where
+    /// they are on the Map. Free arrows aren't dots.
     var graphModel: ForceGraphModel {
         ForceGraphModel(
-            nodes: snapshot.nodes.map { node in
+            nodes: snapshot.nodes.filter { !$0.isLine }.map { node in
                 ForceGraphModel.Node(
                     id: node.id,
                     label: node.title,
@@ -1163,7 +1242,8 @@ final class CanvasController {
 
     /// Space or double-click: the node full size. From inside a detail, it goes on top.
     func openDetail(_ id: UUID? = nil) {
-        guard let id = id ?? selectedNode?.id, node(id) != nil else { return }
+        // Arrows and lines have nothing to show full size.
+        guard let id = id ?? selectedNode?.id, let opened = node(id), !opened.isLine else { return }
         endEditing()
         if linkMode { toggleLinkMode() }
         detailPath.append(.node(id))

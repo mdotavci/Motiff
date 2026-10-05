@@ -152,6 +152,41 @@ enum CanvasGraph {
         return node
     }
 
+    /// A sticky note at `position`, loose, in its color (yellow unless one is given).
+    @discardableResult
+    static func addSticky(to canvas: Canvas, at position: CGPoint, text: String = "", colorHex: String = "#F6D77A", in context: ModelContext) -> CanvasNode {
+        let node = addNode(.sticky, to: canvas, at: position, body: text, in: context)
+        node.colorHex = colorHex
+        return node
+    }
+
+    /// A rectangle, circle, triangle, diamond or star at `position`, loose.
+    @discardableResult
+    static func addShape(_ shape: ShapeKind, to canvas: Canvas, at position: CGPoint, label: String = "", colorHex: String? = nil, in context: ModelContext) -> CanvasNode {
+        let node = addNode(.shape, to: canvas, at: position, body: label, in: context)
+        node.shape = shape
+        node.colorHex = colorHex
+        return node
+    }
+
+    /// A free arrow (or a line, without `arrow`) from `start` to `end`, loose.
+    @discardableResult
+    static func addLine(from start: CGPoint, to end: CGPoint, arrow: Bool = true, on canvas: Canvas, in context: ModelContext) -> CanvasNode {
+        let middle = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+        let node = addNode(.shape, to: canvas, at: middle, in: context)
+        node.shape = arrow ? .arrow : .line
+        node.line = CGVector(dx: end.x - start.x, dy: end.y - start.y)
+        return node
+    }
+
+    /// A free arrow's or line's arrowheads. With none at the end it's a line, otherwise an arrow.
+    static func setArrowheads(of node: CanvasNode, start: Bool, end: Bool) {
+        guard node.isLine else { return }
+        node.shape = end ? .arrow : .line
+        node.hasStartArrow = start
+        touch(node.canvas)
+    }
+
     /// Where `node` fits around `parent` without covering anything else on the Canvas.
     static func freeSpot(for node: CanvasNode, around parent: CanvasNode) -> CGPoint {
         let occupied = (parent.canvas?.nodes ?? []).filter { $0 !== node }.map(rect(of:))

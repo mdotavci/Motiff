@@ -1,6 +1,7 @@
 import Foundation
 
-/// What a node on a Canvas is. Ideas are circles; everything else is a card.
+/// What a node on a board is. Ideas are circles; References, Prompts, Notes and Links are cards;
+/// Text, Stickies and Shapes are drawn straight on the board.
 enum NodeKind: String, Codable, CaseIterable {
     /// A circle. The first one in a Canvas is its root.
     case idea
@@ -14,6 +15,11 @@ enum NodeKind: String, Codable, CaseIterable {
     case link
     /// Free text straight on the Canvas, no card around it: headings, labels, comments.
     case text
+    /// A square sticky note, filled with its color, its text written on it.
+    case sticky
+    /// A rectangle, ellipse, triangle, diamond or star (with an optional label), or a free
+    /// arrow or line: see `ShapeKind`.
+    case shape
 
     var label: String {
         switch self {
@@ -23,6 +29,49 @@ enum NodeKind: String, Codable, CaseIterable {
         case .note: "Note"
         case .link: "Link"
         case .text: "Text"
+        case .sticky: "Sticky"
+        case .shape: "Shape"
+        }
+    }
+}
+
+/// What a `.shape` node draws.
+enum ShapeKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case rectangle, ellipse, triangle, diamond, star
+    /// A free line with an arrowhead at its end.
+    case arrow
+    /// A free line with no arrowhead.
+    case line
+
+    var id: String { rawValue }
+
+    /// The shapes the Shape tool offers; arrows and lines come from the Arrow tool.
+    static let drawn: [ShapeKind] = [.rectangle, .ellipse, .triangle, .diamond, .star]
+
+    /// Arrows and lines run from one point to another instead of filling a box.
+    var isLine: Bool { self == .arrow || self == .line }
+
+    var label: String {
+        switch self {
+        case .rectangle: "Rectangle"
+        case .ellipse: "Circle"
+        case .triangle: "Triangle"
+        case .diamond: "Diamond"
+        case .star: "Star"
+        case .arrow: "Arrow"
+        case .line: "Line"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .rectangle: "square"
+        case .ellipse: "circle"
+        case .triangle: "triangle"
+        case .diamond: "diamond"
+        case .star: "star"
+        case .arrow: "arrow.up.right"
+        case .line: "line.diagonal"
         }
     }
 }

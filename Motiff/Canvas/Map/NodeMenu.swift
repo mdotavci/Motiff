@@ -8,6 +8,33 @@ struct NodeMenu: View {
     var inOutline = false
 
     var body: some View {
+        if node.isLine {
+            lineItems
+        } else {
+            nodeItems
+        }
+    }
+
+    /// A free arrow or line: its color, its arrowheads, delete.
+    @ViewBuilder
+    private var lineItems: some View {
+        colorMenu
+        Toggle("Arrowhead at the End", isOn: Binding(
+            get: { node.shape == .arrow },
+            set: { on in controller.update { CanvasGraph.setArrowheads(of: node, start: node.hasStartArrow, end: on) } }
+        ))
+        Toggle("Arrowhead at the Start", isOn: Binding(
+            get: { node.hasStartArrow },
+            set: { on in controller.update { CanvasGraph.setArrowheads(of: node, start: on, end: node.shape == .arrow) } }
+        ))
+        Divider()
+        Button("Delete", systemImage: "trash", role: .destructive) {
+            act { controller.deleteSelection(branch: false) }
+        }
+    }
+
+    @ViewBuilder
+    private var nodeItems: some View {
         Button("Open", systemImage: "arrow.up.left.and.arrow.down.right") {
             controller.openDetail(node.id)
         }
@@ -33,20 +60,7 @@ struct NodeMenu: View {
                 act { controller.assignCategory(number: 0) }
             }
         }
-        Menu("Color", systemImage: "paintpalette") {
-            ForEach(CanvasCategory.swatches, id: \.hex) { swatch in
-                Button(swatch.name) {
-                    act { controller.setColor(swatch.hex) }
-                }
-            }
-            Divider()
-            Button(node.kind == .text ? "Automatic" : "Category Color") {
-                act { controller.setColor(nil) }
-            }
-            Button("More Colors…") {
-                act { controller.openColorPicker() }
-            }
-        }
+        colorMenu
         Button("Link To…", systemImage: "link") {
             controller.startLink(from: node.id)
         }
@@ -74,6 +88,23 @@ struct NodeMenu: View {
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive) {
             act { controller.deleteSelection(branch: false) }
+        }
+    }
+
+    private var colorMenu: some View {
+        Menu("Color", systemImage: "paintpalette") {
+            ForEach(CanvasCategory.swatches, id: \.hex) { swatch in
+                Button(swatch.name) {
+                    act { controller.setColor(swatch.hex) }
+                }
+            }
+            Divider()
+            Button(node.kind == .text ? "Automatic" : "Category Color") {
+                act { controller.setColor(nil) }
+            }
+            Button("More Colors…") {
+                act { controller.openColorPicker() }
+            }
         }
     }
 

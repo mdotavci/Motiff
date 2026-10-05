@@ -8,21 +8,34 @@ struct CanvasSnapshot: Equatable, Sendable {
         let id: UUID
         let kind: NodeKind
         /// In canvas points, centered on the node's position.
-        let rect: CGRect
+        var rect: CGRect
         let colorHex: String?
         let title: String
         /// For filtering by category and by prompt purpose.
         var categoryID: UUID? = nil
         var purpose: PromptPurpose? = nil
+        /// What a `.shape` draws.
+        var shape: ShapeKind? = nil
+        /// An arrow's or line's run from start to end; zero for everything else.
+        var line: CGVector = .zero
 
         var center: CGPoint { CGPoint(x: rect.midX, y: rect.midY) }
 
-        /// Inside the circle for an Idea, the rectangle for a card.
+        /// An arrow or a line, drawn from `lineStart` to `lineEnd`.
+        var isLine: Bool { kind == .shape && shape?.isLine == true }
+        var lineStart: CGPoint { CGPoint(x: center.x - line.dx / 2, y: center.y - line.dy / 2) }
+        var lineEnd: CGPoint { CGPoint(x: center.x + line.dx / 2, y: center.y + line.dy / 2) }
+
+        /// Inside the circle for an Idea or the ellipse of an ellipse shape, near the line for an
+        /// arrow or line, the rectangle for anything else.
         func contains(_ point: CGPoint) -> Bool {
-            guard kind == .idea else { return rect.contains(point) }
-            let dx = point.x - center.x
-            let dy = point.y - center.y
-            return dx * dx + dy * dy <= (rect.width / 2) * (rect.width / 2)
+            if isLine {
+                return CanvasSnapshot.distance(from: point, toSegment: lineStart, lineEnd) <= CanvasLayout.linePadding
+            }
+            guard kind == .idea || shape == .ellipse else { return rect.contains(point) }
+            let dx = (point.x - center.x) / max(rect.width / 2, 1)
+            let dy = (point.y - center.y) / max(rect.height / 2, 1)
+            return dx * dx + dy * dy <= 1
         }
 
         /// Where a line from this node's center toward `target` leaves its outline:
@@ -55,7 +68,8 @@ struct CanvasSnapshot: Equatable, Sendable {
         var hasArrow = false
     }
 
-    /// Cards first, Ideas last, so circles draw on top.
+    /// Cards and shapes first, then Ideas, then arrows and lines, so circles draw over cards and
+    /// free arrows over everything.
     let nodes: [Node]
     let edges: [Edge]
     private let index: [UUID: Int]
@@ -63,7 +77,8 @@ struct CanvasSnapshot: Equatable, Sendable {
     static let empty = CanvasSnapshot(nodes: [], edges: [])
 
     init(nodes: [Node], edges: [Edge]) {
-        let sorted = nodes.sorted { ($0.kind == .idea ? 1 : 0) < ($1.kind == .idea ? 1 : 0) }
+        func layer(_ node: Node) -> Int { node.isLine ? 2 : node.kind == .idea ? 1 : 0 }
+        let sorted = nodes.sorted { layer($0) < layer($1) }
         self.nodes = sorted
         self.edges = edges
         self.index = Dictionary(sorted.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -82,7 +97,9 @@ struct CanvasSnapshot: Equatable, Sendable {
                 colorHex: node.effectiveColorHex,
                 title: node.displayTitle,
                 categoryID: node.category?.id,
-                purpose: node.reference?.purpose
+                purpose: node.reference?.purpose,
+                shape: node.kind == .shape ? node.shape : nil,
+                line: node.isLine ? node.line : .zero
             ))
             if let parent = node.parent, !parent.isDeleted {
                 edges.append(Edge(
@@ -106,15 +123,9 @@ struct CanvasSnapshot: Equatable, Sendable {
         guard !ids.isEmpty, offset != .zero else { return self }
         let moved = nodes.map { node in
             guard ids.contains(node.id) else { return node }
-            return Node(
-                id: node.id,
-                kind: node.kind,
-                rect: node.rect.offsetBy(dx: offset.width, dy: offset.height),
-                colorHex: node.colorHex,
-                title: node.title,
-                categoryID: node.categoryID,
-                purpose: node.purpose
-            )
+            var moved = node
+            moved.rect = node.rect.offsetBy(dx: offset.width, dy: offset.height)
+            return moved
         }
         return CanvasSnapshot(nodes: moved, edges: edges)
     }
@@ -127,7 +138,7 @@ struct CanvasSnapshot: Equatable, Sendable {
         edges.first { $0.id == id }
     }
 
-    /// The top-most node at a canvas point. Ideas draw on top, so they win over a card under them.
+    /// The top-most node at a canvas point: an arrow over an Idea over a card.
     func node(at point: CGPoint) -> Node? {
         nodes.last(where: { $0.contains(point) })
     }

@@ -163,6 +163,32 @@ private struct NodeInspector: View {
                     controller.update { CanvasGraph.edit(node) { $0.urlString = trimmed.isEmpty ? nil : trimmed } }
                 }
             }
+        case .sticky:
+            DetailSection("Text") {
+                CommitField(prompt: "Write on it", value: node.body ?? "", axis: .vertical) { text in
+                    controller.update { CanvasGraph.edit(node) { $0.body = text } }
+                }
+            }
+        case .shape:
+            DetailSection("Shape") {
+                Picker("Shape", selection: Binding(
+                    get: { node.shape },
+                    set: { new in controller.update { CanvasGraph.edit(node) { $0.shape = new } } }
+                )) {
+                    ForEach(node.isLine ? [ShapeKind.arrow, .line] : ShapeKind.drawn) { shape in
+                        Label(shape.label, systemImage: shape.systemImage).tag(shape)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if !node.isLine {
+                DetailSection("Label") {
+                    CommitField(prompt: "Label", value: node.body ?? "") { text in
+                        controller.update { CanvasGraph.edit(node) { $0.body = text } }
+                    }
+                }
+            }
         case .reference, .prompt:
             if let prompt = node.reference?.copyablePrompt {
                 DetailSection("Prompt") {

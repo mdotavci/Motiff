@@ -175,10 +175,15 @@ enum ShortcutCatalog {
 
     static let selectTool = Shortcut("Select Tool", "v")
     static let handTool = Shortcut("Hand Tool: Drag to Move Around", "h")
-    static let ideaTool = Shortcut("Idea Tool: Click to Place", "o")
+    static let stickyTool = Shortcut("Sticky Tool: Click to Place", "s")
     static let noteTool = Shortcut("Note Tool: Click to Place", "n")
     static let textTool = Shortcut("Text Tool: Click to Place", "t")
+    static let promptTool = Shortcut("Prompt Tool: Click to Place, Then Write It", "p")
     static let imageTool = Shortcut("Image Tool: Click Where Images Go", "i")
+    static let shapeTool = Shortcut("Shape Tool: Click to Place", "r")
+    static let chooseShape = Shortcut("Choose a Shape", pointer: "The arrow next to the Shape tool")
+    static let arrowTool = Shortcut("Arrow Tool: Drag Between Two Things, or Anywhere", "a")
+    static let ideaTool = Shortcut("Idea Tool: Click to Place", "o")
     static let noteByDoubleClick = Shortcut("New Note Right There", pointer: "Double-click empty space")
     static let libraryPanel = Shortcut("Show Library Panel", "l", [.command, .option])
     static let dragFromLibrary = Shortcut("Put a Reference on the Board", pointer: "Drag it from the Library panel")
@@ -188,11 +193,14 @@ enum ShortcutCatalog {
         switch tool {
         case .select: selectTool
         case .hand: handTool
-        case .idea: ideaTool
+        case .sticky: stickyTool
         case .note: noteTool
         case .text: textTool
+        case .prompt: promptTool
         case .image: imageTool
-        case .link: linkMode
+        case .shape: shapeTool
+        case .arrow: arrowTool
+        case .idea: ideaTool
         }
     }
 
@@ -200,16 +208,16 @@ enum ShortcutCatalog {
 
     static let connect = Shortcut("Put a Node Under Another", pointer: "Drag its handle onto it")
     static let connectLink = Shortcut("Link Two Nodes", pointer: "⌥-drag the handle")
-    static let linkMode = Shortcut("Link Mode", "l")
-    static let linkModeClicks = Shortcut("Link in Link Mode", pointer: "Click one node, then another")
-    static let stopLinkMode = Shortcut("Stop Link Mode", .escape)
+    static let linkMode = Shortcut("Arrow Tool, to Link", "l")
+    static let linkModeClicks = Shortcut("Link With the Arrow Tool", pointer: "Click one thing, then another")
+    static let stopLinkMode = Shortcut("Put the Tool Down", .escape)
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
     static let selectLine = Shortcut("Select a Line", pointer: "Click it")
 
     // MARK: Board: colors
 
     static let color = Shortcut("Color of the Selection or Line", "c")
-    static let arrow = Shortcut("Arrowhead On or Off (a selected line)", "a")
+    static let arrow = Shortcut("Arrowhead On or Off (a selected line)", "a", .shift)
     static let deleteLine = Shortcut("Delete the Selected Line", .delete)
 
     static let sections: [ShortcutSection] = [
@@ -219,8 +227,8 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Boards", items: [newCanvas, addToBoard, addToBoardFromMenu]),
         ShortcutSection(title: "Board", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
         ShortcutSection(title: "Board tools", items: [
-            selectTool, handTool, ideaTool, noteTool, textTool, imageTool, noteByDoubleClick,
-            libraryPanel, dragFromLibrary, addFromLibrary,
+            selectTool, handTool, stickyTool, noteTool, textTool, promptTool, imageTool, shapeTool, chooseShape,
+            arrowTool, ideaTool, noteByDoubleClick, libraryPanel, dragFromLibrary, addFromLibrary,
         ]),
         ShortcutSection(title: "Board editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,

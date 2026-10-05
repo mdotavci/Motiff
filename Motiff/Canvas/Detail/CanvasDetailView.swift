@@ -42,7 +42,7 @@ struct CanvasDetailView: View {
                     } else {
                         EmptyState(title: node.kind.label, message: "This card's Reference was deleted.")
                     }
-                case .idea, .note, .link, .text:
+                case .idea, .note, .link, .text, .sticky, .shape:
                     IdeaDetailView(node: node, controller: controller)
                         .id(node.id)
                 }
@@ -229,12 +229,12 @@ private struct IdeaDetailView: View {
                 controller.update { CanvasGraph.edit(node) { $0.body = text.isEmpty ? nil : text } }
             }
             .frame(maxWidth: 720)
-        case .note, .text:
+        case .note, .text, .sticky, .shape:
             MarkdownEditor(
                 value: node.body ?? "",
-                prompt: node.kind == .note ? "Write the note…" : "Write the text…",
+                prompt: Self.writingPrompt(for: node.kind),
                 minHeight: 260,
-                font: node.kind == .note ? .title3 : .body
+                font: node.kind == .text ? .body : .title3
             ) { text in
                 controller.update { CanvasGraph.edit(node) { $0.body = text } }
             }
@@ -253,6 +253,15 @@ private struct IdeaDetailView: View {
             }
         case .reference, .prompt:
             EmptyView()
+        }
+    }
+
+    private static func writingPrompt(for kind: NodeKind) -> String {
+        switch kind {
+        case .note: "Write the note…"
+        case .sticky: "Write on the sticky…"
+        case .shape: "Write the shape's label…"
+        default: "Write the text…"
         }
     }
 
@@ -402,6 +411,16 @@ private struct AttachedTile: View {
                 .font(.callout)
                 .padding(Theme.unit * 1.5)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        case .sticky:
+            Text(node.body ?? "")
+                .font(.callout)
+                .padding(Theme.unit * 1.5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(Palette.fill(node.effectiveColorHex ?? StickyNodeView.defaultHex) ?? .yellow)
+        case .shape:
+            Image(systemName: node.shape.systemImage)
+                .font(.system(size: 36))
+                .foregroundStyle(node.effectiveColorHex.map(Palette.ink) ?? Color.secondary)
         case .link:
             Image(systemName: "globe")
                 .font(.system(size: 28))

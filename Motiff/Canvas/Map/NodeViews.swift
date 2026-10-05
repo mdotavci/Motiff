@@ -12,11 +12,18 @@ struct NodeView: View {
     var isPlaying = false
 
     var body: some View {
-        if node.isIdea {
+        switch node.kind {
+        case .idea:
             IdeaNodeView(node: node, diameter: size.width, editor: editor)
-        } else if node.kind == .text {
+        case .text:
             TextNodeView(node: node, editor: editor)
-        } else {
+        case .sticky:
+            StickyNodeView(node: node, editor: editor)
+        case .shape where node.isLine:
+            LineNodeView(node: node, size: size)
+        case .shape:
+            ShapeNodeView(node: node, editor: editor)
+        case .reference, .prompt, .note, .link:
             CardView(node: node, size: size, zoom: zoom, editor: editor, isPlaying: isPlaying)
         }
     }
@@ -124,9 +131,113 @@ struct CardView: View {
             .foregroundStyle(Palette.text(on: node.effectiveColorHex, chosen: node.textColorHex))
         case .link:
             LinkCardContent(title: node.displayTitle, url: node.url, iconFilename: node.iconFilename, editor: editor, nodeID: node.id)
-        case .idea, .text:
+        case .idea, .text, .sticky, .shape:
             EmptyView()
         }
+    }
+}
+
+/// A square sticky note: filled with its color (yellow until it's given one), its text on it.
+struct StickyNodeView: View {
+    let node: CanvasNode
+    var editor: CanvasController?
+
+    /// The color a new sticky gets.
+    static let defaultHex = "#F6D77A"
+
+    var body: some View {
+        let hex = node.effectiveColorHex ?? Self.defaultHex
+        Group {
+            if let editor {
+                InlineEditor(controller: editor, nodeID: node.id, prompt: "Write on it", axis: .vertical)
+            } else {
+                Text(NoteCardContent.markdown(node.body ?? ""))
+            }
+        }
+        .font(.system(size: 16))
+        .foregroundStyle(Palette.text(on: hex, chosen: node.textColorHex))
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Palette.fill(hex) ?? .yellow, in: RoundedRectangle(cornerRadius: 4))
+        .overlay {
+            if Palette.needsOutline(hex) {
+                RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Sticky: \(node.displayTitle)")
+    }
+}
+
+/// A rectangle, circle, triangle, diamond or star in its color, with its label in the middle.
+struct ShapeNodeView: View {
+    let node: CanvasNode
+    var editor: CanvasController?
+
+    var body: some View {
+        let hex = node.effectiveColorHex
+        let shape = BoxShape(kind: node.shape)
+        shape
+            .fill(Palette.fill(hex) ?? Theme.neutralIdea)
+            .overlay {
+                shape.stroke(hex.map(Palette.ink) ?? Color.primary.opacity(0.35), lineWidth: 1.5)
+            }
+            .overlay {
+                Group {
+                    if let editor {
+                        InlineEditor(controller: editor, nodeID: node.id, prompt: "Label", axis: .vertical, alignment: .center)
+                    } else if let label = node.body, !label.isEmpty {
+                        Text(label)
+                            .minimumScaleFactor(0.6)
+                    }
+                }
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Palette.text(on: hex, chosen: node.textColorHex))
+                .multilineTextAlignment(.center)
+                .padding(labelInsets)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(node.shape.label): \(node.body ?? "")")
+    }
+
+    /// Keeps the label inside the shape's narrower parts.
+    private var labelInsets: EdgeInsets {
+        switch node.shape {
+        case .triangle: EdgeInsets(top: 40, leading: 24, bottom: 10, trailing: 24)
+        case .diamond, .star: EdgeInsets(top: 28, leading: 28, bottom: 28, trailing: 28)
+        case .ellipse: EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18)
+        case .rectangle, .arrow, .line: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        }
+    }
+}
+
+/// A free arrow or line, drawn from its start to its end inside its box. Only the line itself
+/// (and a little room around it) takes clicks.
+struct LineNodeView: View {
+    let node: CanvasNode
+    let size: CGSize
+
+    static let lineWidth: CGFloat = 2.5
+
+    var body: some View {
+        let line = node.line
+        let start = CGPoint(x: size.width / 2 - line.dx / 2, y: size.height / 2 - line.dy / 2)
+        let end = CGPoint(x: size.width / 2 + line.dx / 2, y: size.height / 2 + line.dy / 2)
+        let color = node.effectiveColorHex.map(Palette.ink) ?? Color.primary.opacity(0.75)
+        ZStack {
+            LineShape(start: start, end: end)
+                .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+            if node.shape == .arrow {
+                EdgeLayer.arrowhead(from: start, to: end, lineWidth: Self.lineWidth).fill(color)
+            }
+            if node.hasStartArrow {
+                EdgeLayer.arrowhead(from: end, to: start, lineWidth: Self.lineWidth).fill(color)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .contentShape(LineShape(start: start, end: end).stroke(style: StrokeStyle(lineWidth: CanvasLayout.linePadding * 2)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(node.shape.label)
     }
 }
 

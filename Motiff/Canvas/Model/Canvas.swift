@@ -52,8 +52,9 @@ extension Canvas {
         nodes.filter(\.isRoot).sorted { $0.sortIndex < $1.sortIndex }
     }
 
-    /// Nodes that don't belong to anything and aren't a root: loose cards and ideas.
+    /// Nodes that don't belong to anything and aren't a root: loose cards, stickies, shapes and
+    /// ideas. Free arrows and lines are drawing, not content, so they're left out.
     var unattachedNodes: [CanvasNode] {
-        nodes.filter { $0.parent == nil && !$0.isRoot }.sorted { $0.sortIndex < $1.sortIndex }
+        nodes.filter { $0.parent == nil && !$0.isRoot && !$0.isLine }.sorted { $0.sortIndex < $1.sortIndex }
     }
 }

@@ -102,7 +102,7 @@ struct CanvasMapView: View {
                 keys: [
                     .tab, .return, .delete, .deleteForward, .escape, .space,
                     .leftArrow, .rightArrow, .upArrow, .downArrow, "l", Self.backTab,
-                    "v", "h", "o", "n", "t", "i", "c", "a",
+                    "v", "h", "s", "n", "t", "p", "i", "r", "a", "A", "o", "c",
                     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                 ],
                 phases: [.down, .repeat]
@@ -209,7 +209,7 @@ struct CanvasMapView: View {
                 switch tool {
                 case .select: break
                 case .hand: NSCursor.openHand.push()
-                case .idea, .note, .text, .image, .link: NSCursor.crosshair.push()
+                case .sticky, .note, .text, .prompt, .image, .shape, .arrow, .idea: NSCursor.crosshair.push()
                 }
             }
             .onDisappear {
@@ -284,16 +284,7 @@ struct CanvasMapView: View {
                 .labelStyle(.iconOnly)
                 .frame(width: 150)
         }
-        ToolbarItemGroup(placement: .primaryAction) {
-            Menu("Add", systemImage: "plus") {
-                Button("Note", systemImage: "note.text", action: controller.addNote)
-                Button("Text", systemImage: "textformat", action: controller.addText)
-                Button("Idea", systemImage: "circle", action: controller.addSubIdea)
-                Divider()
-                Button("Photos and Videos…", systemImage: "photo.on.rectangle") { showsPhotos = true }
-                Button("Files…", systemImage: "folder") { isImporting = true }
-                Button("From the Library…", systemImage: "square.grid.2x2") { controller.showsLibrary = true }
-            }
+        ToolbarItem(placement: .primaryAction) {
             Button("Inspector", systemImage: "info.circle", action: controller.toggleInspector)
         }
         #endif
@@ -334,6 +325,32 @@ struct CanvasMapView: View {
                 legend
             }
         }
+    }
+
+    /// Along the bottom of the Map: the tool bar in the middle, the minimap and zoom at the sides.
+    /// On iPhone there's no room side by side, so the minimap and zoom sit above the bar.
+    @ViewBuilder
+    private var bottomControls: some View {
+        let sides = HStack(alignment: .bottom) {
+            if controller.showsMinimap, !controller.snapshot.nodes.isEmpty {
+                Minimap(controller: controller)
+            }
+            Spacer(minLength: 0)
+            ZoomControl(controller: controller)
+        }
+        #if os(iOS)
+        VStack(spacing: Theme.unit) {
+            sides
+            ToolBar(controller: controller, pickPhotos: { showsPhotos = true }, pickFiles: { isImporting = true })
+        }
+        .padding(Theme.gutter)
+        #else
+        ZStack(alignment: .bottom) {
+            sides
+            ToolBar(controller: controller)
+        }
+        .padding(Theme.gutter)
+        #endif
     }
 
     /// The categories and purposes bar. On iPhone it scrolls sideways when it doesn't fit.
@@ -408,6 +425,10 @@ struct CanvasMapView: View {
                 }
             }
 
+            if let draft = controller.arrowDraft {
+                DraftArrow(start: camera.screenPoint(draft.start, in: size), end: camera.screenPoint(draft.end, in: size))
+            }
+
             if let connect = controller.connect, let source = shown.node(connect.sourceID) {
                 ConnectLine(
                     start: camera.screenPoint(source.edgePoint(toward: connect.point), in: size),
@@ -451,15 +472,10 @@ struct CanvasMapView: View {
         .overlay(alignment: .topLeading) {
             legend
         }
-        .overlay(alignment: .bottomTrailing) {
-            ZoomControl(controller: controller)
-                .padding(Theme.gutter)
+        .overlay(alignment: .bottom) {
+            bottomControls
         }
         #if os(macOS)
-        .overlay(alignment: .leading) {
-            ToolBar(controller: controller)
-                .padding(.leading, Theme.gutter)
-        }
         .overlay(alignment: .trailing) {
             if controller.showsLibrary {
                 LibraryDrawer { reference in
@@ -476,12 +492,6 @@ struct CanvasMapView: View {
         }
         .animation(.snappy(duration: 0.2), value: controller.showsLibrary)
         #endif
-        .overlay(alignment: .bottomLeading) {
-            if controller.showsMinimap, !controller.snapshot.nodes.isEmpty {
-                Minimap(controller: controller)
-                    .padding(Theme.gutter)
-            }
-        }
         .overlay(alignment: .top) {
             if controller.linkMode {
                 LinkModePill(hasSource: controller.linkSourceID != nil, stop: controller.toggleLinkMode)
@@ -572,14 +582,16 @@ struct CanvasMapView: View {
         }
             .frame(width: frame.width, height: frame.height)
             .overlay {
-                if isSelected || isTarget {
+                if node.isLine {
+                    if isSelected { LineSelection(node: node, size: frame, zoom: camera.zoom) }
+                } else if isSelected || isTarget {
                     SelectionRing(isIdea: node.isIdea, zoom: camera.zoom)
                 }
             }
             .opacity(isDimmed ? 0.3 : 1)
             // The one elevation in the app: something picked up.
             .shadow(color: .black.opacity(isDragging ? 0.28 : 0), radius: isDragging ? 14 : 0, y: isDragging ? 8 : 0)
-            .contentShape(node.isIdea ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Theme.cardCorner)))
+            .contentShape(Self.hitShape(of: node, size: frame))
             // Right-click on the Mac, long-press on iPhone.
             .contextMenu {
                 if !isEditing { NodeMenu(node: node, controller: controller) }
@@ -597,6 +609,21 @@ struct CanvasMapView: View {
             .zIndex(isDragging ? 1 : 0)
     }
 
+    /// What takes clicks: the circle of an Idea, the shape of a shape, the line itself for an
+    /// arrow, the card for anything else.
+    private static func hitShape(of node: CanvasNode, size: CGSize) -> AnyShape {
+        switch node.kind {
+        case .idea: return AnyShape(Circle())
+        case .shape where node.isLine:
+            let line = node.line
+            let start = CGPoint(x: size.width / 2 - line.dx / 2, y: size.height / 2 - line.dy / 2)
+            let end = CGPoint(x: size.width / 2 + line.dx / 2, y: size.height / 2 + line.dy / 2)
+            return AnyShape(LineShape(start: start, end: end).stroke(style: StrokeStyle(lineWidth: CanvasLayout.linePadding * 2)))
+        case .shape: return AnyShape(BoxShape(kind: node.shape))
+        default: return AnyShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
+        }
+    }
+
     /// Nodes that show a connection handle: the one under the pointer and a single selected one,
     /// or only the source while a line is being drawn.
     private var handleIDs: [UUID] {
@@ -605,7 +632,8 @@ struct CanvasMapView: View {
         var ids: [UUID] = []
         if let hovered = controller.hoveredNodeID { ids.append(hovered) }
         if let selected = controller.selectedNode?.id, selected != controller.hoveredNodeID { ids.append(selected) }
-        return ids
+        // Arrows and lines don't connect to things.
+        return ids.filter { controller.node($0)?.isLine != true }
     }
 
     /// A small circle on a node's right edge. Drag it onto another node to make this one belong
@@ -674,23 +702,40 @@ struct CanvasMapView: View {
     private func nodeDrag(_ id: UUID) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
             .onChanged { value in
-                // With the Hand, dragging a node moves the view, not the node.
+                // With the Hand, dragging a node moves the view, not the node; with the Arrow it
+                // draws a link from it.
                 if controller.tool == .hand {
                     panStep(to: value.translation)
+                } else if controller.tool == .arrow, controller.node(id)?.isLine != true {
+                    controller.connectChanged(from: id, at: value.location, isLink: true)
                 } else {
                     controller.dragChanged(id, translation: value.translation, alone: Self.optionIsDown)
                 }
             }
             .onEnded { _ in
                 lastDrag = .zero
-                controller.dragEnded()
+                if controller.connect != nil {
+                    controller.connectEnded()
+                } else {
+                    controller.dragEnded()
+                }
             }
     }
 
+    /// Dragging the background pans; with the Arrow tool it draws a free arrow instead.
     private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { value in panStep(to: value.translation) }
-            .onEnded { _ in lastDrag = .zero }
+        DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.space))
+            .onChanged { value in
+                if controller.tool == .arrow {
+                    controller.arrowDragChanged(from: value.startLocation, to: value.location)
+                } else {
+                    panStep(to: value.translation)
+                }
+            }
+            .onEnded { _ in
+                lastDrag = .zero
+                controller.arrowDragEnded()
+            }
     }
 
     /// Pans by how far the drag went since the last step.
@@ -700,11 +745,16 @@ struct CanvasMapView: View {
         controller.pan(by: delta)
     }
 
-    /// A click on the Map with an adding tool: the Idea, Note or Text goes there, or the image
-    /// picker opens for there. False when the tool doesn't add (Select, Hand, Link).
+    /// A click on the board with an adding tool: the sticky, note, text, shape, Idea or prompt
+    /// goes there, or the image picker opens for there. False when the tool doesn't add
+    /// (Select, Hand, Arrow).
     private func useTool(at location: CGPoint) -> Bool {
         if let kind = controller.tool.adds {
             controller.place(kind, at: location)
+            return true
+        }
+        if controller.tool == .prompt {
+            controller.placePrompt(at: location)
             return true
         }
         guard controller.tool == .image else { return false }
@@ -742,6 +792,7 @@ struct CanvasMapView: View {
         }
         let command = press.modifiers.contains(.command)
         let plain = press.modifiers.isDisjoint(with: [.command, .shift, .option, .control])
+        let shiftOnly = press.modifiers.intersection([.command, .shift, .option, .control]) == .shift
         if plain, let number = press.key.character.wholeNumberValue {
             controller.assignCategory(number: number)
             return .handled
@@ -754,7 +805,7 @@ struct CanvasMapView: View {
             return .handled
         }
         if controller.viewMode == .map, plain,
-           let tool = CanvasTool.allCases.first(where: { $0.key == press.key.character && $0 != .link }) {
+           let tool = CanvasTool.allCases.first(where: { $0.key == press.key.character }) {
             controller.setTool(tool)
             return .handled
         }
@@ -773,7 +824,7 @@ struct CanvasMapView: View {
             }
         case "c" where plain:
             controller.openColorPicker()
-        case "a" where plain:
+        case "a" where shiftOnly, "A" where shiftOnly:
             controller.toggleArrow()
         case "l" where plain:
             controller.toggleLinkMode()
@@ -898,14 +949,14 @@ private struct LinkModePill: View {
         // No Esc key on a phone: the pill itself stops it.
         Button(action: stop) {
             HStack(spacing: 8) {
-                Text(hasSource ? "Link mode · tap the node to link to" : "Link mode · tap two nodes")
+                Text(hasSource ? "Arrow · tap the one to point at" : "Arrow · tap two things, or drag")
                 Text("Done").fontWeight(.semibold)
             }
             .modifier(PillStyle())
         }
         .buttonStyle(.plain)
         #else
-        Text(hasSource ? "Link mode · now click the node to link to · esc to stop" : "Link mode · click two nodes · esc to stop")
+        Text(hasSource ? "Arrow · now click the one to point at · esc to stop" : "Arrow · drag between two things or anywhere, or click two · esc to stop")
             .modifier(PillStyle())
             .allowsHitTesting(false)
         #endif
@@ -937,6 +988,39 @@ private struct SelectionRing: View {
             } else {
                 RoundedRectangle(cornerRadius: Theme.cardCorner).inset(by: -gap).stroke(Theme.accent, lineWidth: width)
             }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// A selected arrow or line: a soft band of focus red along it.
+private struct LineSelection: View {
+    let node: CanvasNode
+    let size: CGSize
+    let zoom: CGFloat
+
+    var body: some View {
+        let line = node.line
+        LineShape(
+            start: CGPoint(x: size.width / 2 - line.dx / 2, y: size.height / 2 - line.dy / 2),
+            end: CGPoint(x: size.width / 2 + line.dx / 2, y: size.height / 2 + line.dy / 2)
+        )
+        .stroke(Theme.accent.opacity(0.35), style: StrokeStyle(lineWidth: 10 / zoom, lineCap: .round))
+        .allowsHitTesting(false)
+    }
+}
+
+/// A free arrow while the Arrow tool is dragged on empty board.
+private struct DraftArrow: View {
+    let start: CGPoint
+    let end: CGPoint
+
+    var body: some View {
+        ZStack {
+            LineShape(start: start, end: end)
+                .stroke(Color.primary.opacity(0.75), style: StrokeStyle(lineWidth: LineNodeView.lineWidth, lineCap: .round))
+            EdgeLayer.arrowhead(from: start, to: end, lineWidth: LineNodeView.lineWidth)
+                .fill(Color.primary.opacity(0.75))
         }
         .allowsHitTesting(false)
     }

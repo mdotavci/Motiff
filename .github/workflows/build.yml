@@ -83,7 +83,8 @@ jobs:
             "canvas:Product photography look|select=Light|detail" \
             "canvas:Product photography look|select=Light|inspector" \
             "canvas:Product photography look|view=graph" \
-            "board:Product photography"
+            "board:Product photography" \
+            "board:Moodboard example"
 
       # Pushed to ci-snapshots/<branch>-ios, next to the Mac ones.
       - name: Publish snapshots
@@ -202,6 +203,8 @@ jobs:
             "canvas:500 nodes|stress" \
             "canvas:Product photography look|drawer" \
             "board:Product photography" \
+            "board:Moodboard example" \
+            "board:Moodboard example|select=Hero shot" \
             "library|shortcuts"
 
       # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with
