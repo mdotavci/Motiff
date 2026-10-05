@@ -54,12 +54,13 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Placement | New nodes take the first free spot on rings around their Idea; nothing is ever re-laid out | Positions you dragged to stay put |
 | Moving | Dragging an Idea brings everything under it; ⌥-drag moves just the Idea | A branch moves as one, like a mind map |
 | Keys | Tab, Return, ⌫ and Esc are handled by the Map, not the menus; ⌘ shortcuts are menu items. All of them are in `ShortcutCatalog`, which the ⌘/ sheet lists | Plain-key menu shortcuts would steal those keys from text fields |
+| Connecting | Drag a node's handle onto another: it belongs to that one; ⌥-drag or L mode links them. Right-click a line to label, convert or delete it | Belonging is the common case, so it gets the plain gesture |
 | Undo | SwiftData's context uses the window's undo manager; a drag is one step; looking around (the viewport) isn't recorded | ⌘Z undoes edits, not panning |
 
 1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
 2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom *(done)*
 3. Create and edit: root Idea, Tab / ⌘Return, drag to move, auto-placement, undo, inspector, shortcuts sheet (⌘/) *(done)*
-4. Linking: handles, drag to link, link types, labels, selection highlight
+4. Linking: handles, drag to link, link types, labels, selection highlight *(done)*
 5. Detail view from the Map, Esc back, sibling navigation, Connections
 6. Drag and paste onto the Map (shares capture with step 4 above)
 7. Category legend and filters; purpose filter in the Canvas and the Library

@@ -5,6 +5,10 @@ import SwiftUI
 struct EdgeLayer: View {
     let snapshot: CanvasSnapshot
     let camera: CanvasCamera
+    /// The line under the pointer, drawn heavier.
+    var hoveredEdgeID: String?
+    /// While something is selected: lines that touch none of it are dimmed.
+    var focus: Set<UUID>?
 
     /// Below this zoom, labels are too small to read and are left out.
     static let labelMinimumZoom: CGFloat = 0.4
@@ -12,26 +16,34 @@ struct EdgeLayer: View {
     var body: some View {
         SwiftUI.Canvas { context, size in
             for edge in snapshot.edges {
-                guard let from = snapshot.node(edge.from), let to = snapshot.node(edge.to) else { continue }
-                let start = camera.screenPoint(from.edgePoint(toward: to.center), in: size)
-                let end = camera.screenPoint(to.edgePoint(toward: from.center), in: size)
+                guard let segment = snapshot.segment(of: edge) else { continue }
+                let start = camera.screenPoint(segment.start, in: size)
+                let end = camera.screenPoint(segment.end, in: size)
+                let hovered = edge.id == hoveredEdgeID
+                let dimmed = focus.map { !$0.contains(edge.from) && !$0.contains(edge.to) } ?? false
 
                 var path = Path()
                 path.move(to: start)
                 path.addLine(to: end)
+                var lineContext = context
+                if dimmed { lineContext.opacity = 0.3 }
                 switch edge.type {
                 case .belongsTo:
-                    context.stroke(path, with: .color(.primary.opacity(0.3)), lineWidth: 1)
-                case .relatesTo:
-                    context.stroke(
+                    lineContext.stroke(
                         path,
-                        with: .color(.primary.opacity(0.45)),
-                        style: StrokeStyle(lineWidth: 2, dash: [6, 5])
+                        with: .color(.primary.opacity(hovered ? 0.7 : 0.3)),
+                        lineWidth: hovered ? 2.5 : 1
+                    )
+                case .relatesTo:
+                    lineContext.stroke(
+                        path,
+                        with: .color(.primary.opacity(hovered ? 0.8 : 0.45)),
+                        style: StrokeStyle(lineWidth: hovered ? 3.5 : 2, dash: [6, 5])
                     )
                 }
 
                 if let label = edge.label, !label.isEmpty, camera.zoom >= Self.labelMinimumZoom {
-                    drawLabel(label, at: CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2), in: &context)
+                    drawLabel(label, at: CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2), in: &lineContext)
                 }
             }
         }

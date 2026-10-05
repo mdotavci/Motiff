@@ -2,6 +2,9 @@ import CoreGraphics
 import Foundation
 import Observation
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
 /// State for one open Canvas: what the Map shows (`snapshot`), where it's looking (`camera`),
 /// what's selected, being edited or dragged. One per Canvas view; the Canvas itself stays the
@@ -14,8 +17,11 @@ final class CanvasController {
     private(set) var camera: CanvasCamera
     private(set) var viewSize: CGSize = .zero
     private(set) var snapshot: CanvasSnapshot = .empty
-    /// The pointer over the map, in view points; nil when it's elsewhere.
-    var pointer: CGPoint?
+    /// The pointer over the map, in view points; nil when it's elsewhere. Set with `setPointer`.
+    private(set) var pointer: CGPoint?
+    /// The node under the pointer (its handle shows) and the line under it (right-click acts on it).
+    private(set) var hoveredNodeID: UUID?
+    private(set) var hoveredEdgeID: String?
 
     private(set) var selection: Set<UUID> = []
     /// The node whose text is being typed into on the Map, and the text so far.
@@ -29,6 +35,21 @@ final class CanvasController {
         var ids: Set<UUID>
         var offset: CGSize
     }
+
+    /// A line being drawn from a node's handle: where the pointer is (canvas points), what's
+    /// under it, and whether it makes a relates-to link (⌥) or belonging.
+    private(set) var connect: Connect?
+
+    struct Connect: Equatable {
+        var sourceID: UUID
+        var point: CGPoint
+        var targetID: UUID?
+        var isLink: Bool
+    }
+
+    /// L: click two nodes to link them. `linkSourceID` is the first one clicked.
+    private(set) var linkMode = false
+    private(set) var linkSourceID: UUID?
 
     /// A Note just made with Tab: if it's left empty, it isn't kept.
     @ObservationIgnored private var freshID: UUID?
@@ -193,6 +214,41 @@ final class CanvasController {
         reload()
     }
 
+    // MARK: Hover
+
+    /// How close (in view points) the pointer must be to a line to pick it.
+    static let edgeTolerance: CGFloat = 6
+    /// How far past a node's outline (view points) it stays hovered, so its handle can be reached.
+    static let hoverReach: CGFloat = 16
+
+    func setPointer(_ point: CGPoint?) {
+        pointer = point
+        guard let point, viewSize.width > 0 else {
+            hoveredNodeID = nil
+            hoveredEdgeID = nil
+            return
+        }
+        let canvasPoint = camera.canvasPoint(point, in: viewSize)
+        let reach = Self.hoverReach / camera.zoom
+        var nodeID = snapshot.node(at: canvasPoint)?.id
+        if nodeID == nil, let current = hoveredNodeID.flatMap({ snapshot.node($0) }),
+           current.rect.insetBy(dx: -reach, dy: -reach).contains(canvasPoint) {
+            nodeID = current.id
+        }
+        let edgeID = nodeID == nil ? snapshot.edge(near: canvasPoint, tolerance: Self.edgeTolerance / camera.zoom)?.id : nil
+        if nodeID != hoveredNodeID { hoveredNodeID = nodeID }
+        if edgeID != hoveredEdgeID { hoveredEdgeID = edgeID }
+    }
+
+    var hoveredEdge: CanvasSnapshot.Edge? {
+        hoveredEdgeID.flatMap { snapshot.edge($0) }
+    }
+
+    /// While something is selected: it and everything one line away. Nil means nothing is dimmed.
+    var highlighted: Set<UUID>? {
+        selection.isEmpty ? nil : snapshot.neighbors(of: selection)
+    }
+
     // MARK: Selection
 
     /// Selected nodes in sibling order.
@@ -205,10 +261,20 @@ final class CanvasController {
         selection.count == 1 ? selection.first.flatMap(node) : nil
     }
 
-    /// Click selects; ⇧-click adds or removes.
+    /// Click selects; ⇧-click adds or removes. In link mode, the second click links.
     func tap(_ id: UUID, extending: Bool) {
         guard editingID != id else { return }
         endEditing()
+        if linkMode {
+            if let sourceID = linkSourceID, sourceID != id {
+                makeLink(from: sourceID, to: id)
+                linkSourceID = nil
+            } else {
+                linkSourceID = id
+            }
+            selection = [id]
+            return
+        }
         if extending {
             if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
         } else {
@@ -218,7 +284,15 @@ final class CanvasController {
 
     func clearSelection() {
         endEditing()
+        linkSourceID = nil
         selection = []
+    }
+
+    /// Selects a node and pans to it, e.g. from the inspector's link lists.
+    func focus(on id: UUID) {
+        endEditing()
+        selection = [id]
+        reveal(id)
     }
 
     func toggleInspector() {
@@ -355,6 +429,120 @@ final class CanvasController {
             reload()
         }
         self.drag = nil
+    }
+
+    // MARK: Connecting
+
+    /// Dragging a node's handle. Over another node, that node is the target.
+    func connectChanged(from sourceID: UUID, at viewPoint: CGPoint, isLink: Bool) {
+        if connect == nil { endEditing() }
+        let point = camera.canvasPoint(viewPoint, in: viewSize)
+        let target = snapshot.node(at: point).map(\.id)
+        connect = Connect(sourceID: sourceID, point: point, targetID: target == sourceID ? nil : target, isLink: isLink)
+    }
+
+    /// Drops the line: the dragged node belongs to the target, or with ⌥ they're linked.
+    /// Anything the rules refuse (a cycle, a duplicate) beeps and changes nothing.
+    func connectEnded() {
+        guard let connect else { return }
+        self.connect = nil
+        guard let targetID = connect.targetID else { return }
+        if connect.isLink {
+            makeLink(from: connect.sourceID, to: targetID)
+        } else if let context, let source = node(connect.sourceID), let target = node(targetID) {
+            guard source.parent !== target else { return }
+            if CanvasGraph.setParent(source, to: target, in: context) {
+                save()
+                reload()
+            } else {
+                Self.refuse()
+            }
+        }
+    }
+
+    func toggleLinkMode() {
+        endEditing()
+        linkMode.toggle()
+        linkSourceID = nil
+    }
+
+    private func makeLink(from sourceID: UUID, to targetID: UUID) {
+        guard let context, let source = node(sourceID), let target = node(targetID) else { return }
+        if CanvasGraph.link(source, to: target, in: context) != nil {
+            save()
+            reload()
+        } else {
+            Self.refuse()
+        }
+    }
+
+    // MARK: Lines
+
+    /// The child of a belongs-to line, or the link of a relates-to one.
+    private func parts(of edge: CanvasSnapshot.Edge) -> (child: CanvasNode?, link: CanvasLink?) {
+        switch edge.type {
+        case .belongsTo:
+            return (node(edge.to), nil)
+        case .relatesTo:
+            guard let from = node(edge.from), let to = node(edge.to) else { return (nil, nil) }
+            return (nil, CanvasGraph.link(between: from, and: to))
+        }
+    }
+
+    func setLabel(_ label: String, on edge: CanvasSnapshot.Edge) {
+        let (child, link) = parts(of: edge)
+        guard child != nil || link != nil else { return }
+        update { CanvasGraph.setLabel(label, child: child, link: link) }
+    }
+
+    /// Belongs to ⇄ relates to.
+    func convert(_ edge: CanvasSnapshot.Edge) {
+        guard let context else { return }
+        let (child, link) = parts(of: edge)
+        var done = false
+        if let child {
+            done = CanvasGraph.convertToLink(child: child, in: context) != nil
+        } else if let link {
+            done = CanvasGraph.convertToParent(link, in: context)
+        }
+        if done {
+            save()
+            reload()
+        } else {
+            Self.refuse()
+        }
+    }
+
+    /// Deletes a link, or detaches a node from what it belongs to (it stays on the Canvas).
+    func deleteEdge(_ edge: CanvasSnapshot.Edge) {
+        guard let context else { return }
+        let (child, link) = parts(of: edge)
+        if let child {
+            CanvasGraph.setParent(child, to: nil, in: context)
+        } else if let link {
+            CanvasGraph.unlink(link, in: context)
+        } else {
+            return
+        }
+        save()
+        reload()
+    }
+
+    func unlink(_ link: CanvasLink) {
+        guard let context else { return }
+        update { CanvasGraph.unlink(link, in: context) }
+    }
+
+    func detach(_ node: CanvasNode) {
+        guard let context else { return }
+        update { CanvasGraph.setParent(node, to: nil, in: context) }
+    }
+
+    /// Something the Canvas's rules don't allow.
+    private static func refuse() {
+        #if os(macOS)
+        NSSound.beep()
+        #endif
     }
 
     #if DEBUG

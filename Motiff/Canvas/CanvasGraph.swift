@@ -286,6 +286,48 @@ enum CanvasGraph {
         a.outgoing.first { $0.to === b } ?? a.incoming.first { $0.from === b }
     }
 
+    // MARK: Changing a line
+
+    /// Turns `child`'s belongs-to line into a relates-to link from its parent, keeping the label.
+    @discardableResult
+    static func convertToLink(child: CanvasNode, in context: ModelContext) -> CanvasLink? {
+        guard let parent = child.parent else { return nil }
+        let label = child.parentLabel
+        setParent(child, to: nil, in: context)
+        return link(parent, to: child, label: label, in: context)
+    }
+
+    /// Turns a relates-to link into belonging, keeping the label: `to` belongs to `from`, or the
+    /// other way round when that would put a node under its own descendant. Returns false, and
+    /// changes nothing, if neither way works.
+    @discardableResult
+    static func convertToParent(_ link: CanvasLink, in context: ModelContext) -> Bool {
+        guard let from = link.from, let to = link.to else { return false }
+        let label = link.label
+        let child: CanvasNode
+        let parent: CanvasNode
+        if !from.isDescendant(of: to) {
+            child = to
+            parent = from
+        } else if !to.isDescendant(of: from) {
+            child = from
+            parent = to
+        } else {
+            return false
+        }
+        // setParent drops the link between the two.
+        return setParent(child, to: parent, label: label, in: context)
+    }
+
+    /// The label on a belongs-to line (stored on the child) or a relates-to link. Empty clears it.
+    static func setLabel(_ label: String, child: CanvasNode? = nil, link: CanvasLink? = nil) {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed.isEmpty ? nil : trimmed
+        if let child { child.parentLabel = value }
+        if let link { link.label = value }
+        touch(child?.canvas ?? link?.canvas)
+    }
+
     // MARK: Order
 
     /// One past the last sibling, so a new node goes to the end.

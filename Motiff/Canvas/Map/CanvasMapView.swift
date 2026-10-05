@@ -12,6 +12,9 @@ struct CanvasMapView: View {
     @State private var controller: CanvasController
     @State private var lastDrag: CGSize = .zero
     @FocusState private var mapFocused: Bool
+    /// The line whose label is being typed in the Label… alert.
+    @State private var labelingEdge: CanvasSnapshot.Edge?
+    @State private var labelDraft = ""
 
     /// The Map's own coordinate space, so node drags measure against something that stays put.
     private static let space = "canvas.map"
@@ -26,6 +29,8 @@ struct CanvasMapView: View {
         let size = controller.viewSize
         let shown = controller.displayedSnapshot
         let dragging = controller.drag?.ids ?? []
+        let highlighted = controller.highlighted
+        let targetID = controller.connect?.targetID
         ZStack(alignment: .topLeading) {
             Theme.canvasGround
                 .contentShape(Rectangle())
@@ -34,11 +39,38 @@ struct CanvasMapView: View {
                     mapFocused = true
                 }
 
-            EdgeLayer(snapshot: shown, camera: camera)
+            EdgeLayer(
+                snapshot: shown,
+                camera: camera,
+                hoveredEdgeID: controller.hoveredEdgeID,
+                focus: highlighted == nil ? nil : controller.selection
+            )
 
             ForEach(controller.visibleNodes(in: shown)) { geometry in
                 if let node = controller.node(geometry.id) {
-                    placedNode(node, geometry: geometry, camera: camera, size: size, isDragging: dragging.contains(node.id))
+                    placedNode(
+                        node,
+                        geometry: geometry,
+                        camera: camera,
+                        size: size,
+                        isDragging: dragging.contains(node.id),
+                        isTarget: node.id == targetID || node.id == controller.linkSourceID,
+                        isDimmed: highlighted.map { !$0.contains(node.id) } ?? false
+                    )
+                }
+            }
+
+            if let connect = controller.connect, let source = shown.node(connect.sourceID) {
+                ConnectLine(
+                    start: camera.screenPoint(source.edgePoint(toward: connect.point), in: size),
+                    end: camera.screenPoint(connect.point, in: size),
+                    isLink: connect.isLink
+                )
+            }
+
+            ForEach(handleIDs, id: \.self) { id in
+                if let geometry = shown.node(id) {
+                    handle(for: geometry, camera: camera, size: size)
                 }
             }
         }
@@ -49,8 +81,8 @@ struct CanvasMapView: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { controller.setViewSize($0) }
         .onContinuousHover { phase in
             switch phase {
-            case .active(let location): controller.pointer = location
-            case .ended: controller.pointer = nil
+            case .active(let location): controller.setPointer(location)
+            case .ended: controller.setPointer(nil)
             }
         }
         .gesture(panGesture)
@@ -60,7 +92,7 @@ struct CanvasMapView: View {
         .focusable()
         .focused($mapFocused)
         .focusEffectDisabled()
-        .onKeyPress(keys: [.tab, .return, .delete, .deleteForward, .escape], phases: [.down, .repeat]) { press in
+        .onKeyPress(keys: [.tab, .return, .delete, .deleteForward, .escape, "l"], phases: [.down, .repeat]) { press in
             handleKey(press)
         }
         .overlay(alignment: .topLeading) {
@@ -70,6 +102,26 @@ struct CanvasMapView: View {
         .overlay(alignment: .bottomTrailing) {
             ZoomControl(controller: controller)
                 .padding(Theme.gutter)
+        }
+        .overlay(alignment: .top) {
+            if controller.linkMode {
+                LinkModePill(hasSource: controller.linkSourceID != nil)
+                    .padding(.top, Theme.gutter + 44)
+            }
+        }
+        .contextMenu {
+            if let edge = controller.hoveredEdge {
+                edgeMenu(edge)
+            }
+        }
+        .alert("Label", isPresented: isLabeling) {
+            TextField("Label", text: $labelDraft)
+            Button("Save") {
+                if let edge = labelingEdge { controller.setLabel(labelDraft, on: edge) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("A word or two on the line. Leave it empty to remove the label.")
         }
         .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
             CanvasInspector(controller: controller)
@@ -90,6 +142,14 @@ struct CanvasMapView: View {
             // Back to the Map when typing ends, so Tab and ⌫ work again.
             if editing == nil { mapFocused = true }
         }
+        #if os(macOS)
+        .onChange(of: controller.linkMode) { _, on in
+            if on { NSCursor.crosshair.push() } else { NSCursor.pop() }
+        }
+        .onDisappear {
+            if controller.linkMode { NSCursor.pop() }
+        }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
         .focusedSceneValue(\.canvasZoom, CanvasZoomActions(
@@ -105,7 +165,9 @@ struct CanvasMapView: View {
             edit: { controller.beginEditing() },
             delete: { controller.deleteSelection(branch: false) },
             deleteBranch: { controller.deleteSelection(branch: true) },
-            toggleInspector: controller.toggleInspector
+            toggleInspector: controller.toggleInspector,
+            linkMode: controller.linkMode,
+            toggleLinkMode: controller.toggleLinkMode
         ))
         .navigationTitle(canvas.displayTitle)
     }
@@ -117,7 +179,9 @@ struct CanvasMapView: View {
         geometry: CanvasSnapshot.Node,
         camera: CanvasCamera,
         size: CGSize,
-        isDragging: Bool
+        isDragging: Bool,
+        isTarget: Bool,
+        isDimmed: Bool
     ) -> some View {
         let isEditing = controller.editingID == node.id
         let isSelected = controller.selection.contains(node.id)
@@ -126,10 +190,11 @@ struct CanvasMapView: View {
         return NodeView(node: node, size: geometry.rect.size, zoom: camera.zoom, editor: isEditing ? controller : nil)
             .frame(width: geometry.rect.width, height: geometry.rect.height)
             .overlay {
-                if isSelected {
+                if isSelected || isTarget {
                     SelectionRing(isIdea: node.isIdea, zoom: camera.zoom)
                 }
             }
+            .opacity(isDimmed ? 0.3 : 1)
             // The one elevation in the app: something picked up.
             .shadow(color: .black.opacity(isDragging ? 0.28 : 0), radius: isDragging ? 14 : 0, y: isDragging ? 8 : 0)
             .contentShape(node.isIdea ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Theme.cardCorner)))
@@ -142,6 +207,58 @@ struct CanvasMapView: View {
             .scaleEffect(camera.zoom)
             .position(camera.screenPoint(geometry.center, in: size))
             .zIndex(isDragging ? 1 : 0)
+    }
+
+    /// Nodes that show a connection handle: the one under the pointer and a single selected one,
+    /// or only the source while a line is being drawn.
+    private var handleIDs: [UUID] {
+        if let connect = controller.connect { return [connect.sourceID] }
+        guard controller.editingID == nil, controller.drag == nil, !controller.linkMode else { return [] }
+        var ids: [UUID] = []
+        if let hovered = controller.hoveredNodeID { ids.append(hovered) }
+        if let selected = controller.selectedNode?.id, selected != controller.hoveredNodeID { ids.append(selected) }
+        return ids
+    }
+
+    /// A small circle on a node's right edge. Drag it onto another node to make this one belong
+    /// to it; ⌥-drag to link the two instead. Same size at every zoom.
+    private func handle(for geometry: CanvasSnapshot.Node, camera: CanvasCamera, size: CGSize) -> some View {
+        let id = geometry.id
+        return Circle()
+            .fill(Theme.cardSurface)
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.6), lineWidth: 1.5))
+            .frame(width: 12, height: 12)
+            .padding(6)
+            .contentShape(Circle())
+            .position(camera.screenPoint(CGPoint(x: geometry.rect.maxX, y: geometry.rect.midY), in: size))
+            .gesture(
+                DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.space))
+                    .onChanged { value in
+                        controller.connectChanged(from: id, at: value.location, isLink: Self.optionIsDown)
+                    }
+                    .onEnded { _ in controller.connectEnded() }
+            )
+            .help("Drag onto another node to put this under it. ⌥-drag to link them.")
+            .accessibilityLabel("Connection handle")
+    }
+
+    @ViewBuilder
+    private func edgeMenu(_ edge: CanvasSnapshot.Edge) -> some View {
+        Button("Label…") {
+            labelDraft = edge.label ?? ""
+            labelingEdge = edge
+        }
+        Button(edge.type == .belongsTo ? "Change to Relates To" : "Change to Belongs To") {
+            controller.convert(edge)
+        }
+        Divider()
+        Button(edge.type == .belongsTo ? "Detach" : "Delete Link", role: .destructive) {
+            controller.deleteEdge(edge)
+        }
+    }
+
+    private var isLabeling: Binding<Bool> {
+        Binding { labelingEdge != nil } set: { if !$0 { labelingEdge = nil } }
     }
 
     private func nodeDrag(_ id: UUID) -> some Gesture {
@@ -179,8 +296,14 @@ struct CanvasMapView: View {
             controller.beginEditing()
         case .delete, .deleteForward:
             controller.deleteSelection(branch: command)
+        case "l" where plain:
+            controller.toggleLinkMode()
         case .escape:
-            controller.clearSelection()
+            if controller.linkMode {
+                controller.toggleLinkMode()
+            } else {
+                controller.clearSelection()
+            }
         default:
             return .ignored
         }
@@ -201,6 +324,40 @@ struct CanvasMapView: View {
         #else
         false
         #endif
+    }
+}
+
+/// The line following the pointer while connecting: solid for belonging, dashed for a link.
+private struct ConnectLine: View {
+    let start: CGPoint
+    let end: CGPoint
+    let isLink: Bool
+
+    var body: some View {
+        Path { path in
+            path.move(to: start)
+            path.addLine(to: end)
+        }
+        .stroke(
+            Color.primary.opacity(0.6),
+            style: StrokeStyle(lineWidth: isLink ? 2 : 1.5, lineCap: .round, dash: isLink ? [6, 5] : [])
+        )
+        .allowsHitTesting(false)
+    }
+}
+
+/// Shown while L link mode is on.
+private struct LinkModePill: View {
+    let hasSource: Bool
+
+    var body: some View {
+        Text(hasSource ? "Link mode · now click the node to link to · esc to stop" : "Link mode · click two nodes · esc to stop")
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(Theme.cardSurface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.cardBorder, lineWidth: 1))
+            .allowsHitTesting(false)
     }
 }
 

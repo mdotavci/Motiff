@@ -14,6 +14,14 @@ struct CanvasSnapshot: Equatable, Sendable {
 
         var center: CGPoint { CGPoint(x: rect.midX, y: rect.midY) }
 
+        /// Inside the circle for an Idea, the rectangle for a card.
+        func contains(_ point: CGPoint) -> Bool {
+            guard kind == .idea else { return rect.contains(point) }
+            let dx = point.x - center.x
+            let dy = point.y - center.y
+            return dx * dx + dy * dy <= (rect.width / 2) * (rect.width / 2)
+        }
+
         /// Where a line from this node's center toward `target` leaves its outline:
         /// the circle for an Idea, the rectangle for a card.
         func edgePoint(toward target: CGPoint) -> CGPoint {
@@ -96,6 +104,57 @@ struct CanvasSnapshot: Equatable, Sendable {
 
     func node(_ id: UUID) -> Node? {
         index[id].map { nodes[$0] }
+    }
+
+    func edge(_ id: String) -> Edge? {
+        edges.first { $0.id == id }
+    }
+
+    /// The top-most node at a canvas point. Ideas draw on top, so they win over a card under them.
+    func node(at point: CGPoint) -> Node? {
+        nodes.last(where: { $0.contains(point) })
+    }
+
+    /// Where a line is drawn, in canvas points: from outline to outline.
+    func segment(of edge: Edge) -> (start: CGPoint, end: CGPoint)? {
+        guard let from = node(edge.from), let to = node(edge.to) else { return nil }
+        return (from.edgePoint(toward: to.center), to.edgePoint(toward: from.center))
+    }
+
+    /// The line closest to a canvas point, if it's within `tolerance` (canvas points).
+    func edge(near point: CGPoint, tolerance: CGFloat) -> Edge? {
+        var best: (edge: Edge, distance: CGFloat)?
+        for edge in edges {
+            guard let segment = segment(of: edge) else { continue }
+            let distance = Self.distance(from: point, toSegment: segment.start, segment.end)
+            if distance <= tolerance, distance < (best?.distance ?? .infinity) {
+                best = (edge, distance)
+            }
+        }
+        return best?.edge
+    }
+
+    /// The given nodes and everything one line away from them.
+    func neighbors(of ids: Set<UUID>) -> Set<UUID> {
+        var result = ids
+        for edge in edges {
+            if ids.contains(edge.from) { result.insert(edge.to) }
+            if ids.contains(edge.to) { result.insert(edge.from) }
+        }
+        return result
+    }
+
+    static func distance(from point: CGPoint, toSegment a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        var t: CGFloat = 0
+        if lengthSquared > 0 {
+            t = min(max(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared, 0), 1)
+        }
+        let x = a.x + t * dx - point.x
+        let y = a.y + t * dy - point.y
+        return (x * x + y * y).squareRoot()
     }
 
     /// Everything on the Canvas, or `.null` when it's empty.

@@ -103,6 +103,15 @@ enum ShortcutCatalog {
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
 
+    // MARK: Canvas: connecting
+
+    static let connect = Shortcut("Put a Node Under Another", pointer: "Drag its handle onto it")
+    static let connectLink = Shortcut("Link Two Nodes", pointer: "⌥-drag the handle")
+    static let linkMode = Shortcut("Link Mode", "l")
+    static let linkModeClicks = Shortcut("Link in Link Mode", pointer: "Click one node, then another")
+    static let stopLinkMode = Shortcut("Stop Link Mode", .escape)
+    static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
+
     static let sections: [ShortcutSection] = [
         ShortcutSection(title: "Motiff", items: [newCanvas, undo, redo, showShortcuts]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
@@ -110,6 +119,9 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
+        ]),
+        ShortcutSection(title: "Canvas connections", items: [
+            connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,
         ]),
     ]
 }

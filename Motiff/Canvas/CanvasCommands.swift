@@ -23,6 +23,8 @@ struct CanvasEditActions {
     var delete: @MainActor () -> Void
     var deleteBranch: @MainActor () -> Void
     var toggleInspector: @MainActor () -> Void
+    var linkMode: Bool
+    var toggleLinkMode: @MainActor () -> Void
 }
 
 extension FocusedValues {
@@ -35,7 +37,7 @@ extension FocusedValues {
 /// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app),
 /// the Canvas menu, and Help › Keyboard Shortcuts (⌘/).
 ///
-/// Tab, Return, ⌫ and Esc are handled by the Map itself, not here: as menu shortcuts they'd
+/// Tab, Return, L, ⌫ and Esc are handled by the Map itself, not here: as menu shortcuts they'd
 /// take those keys away from every text field. Their menu items show no key; the help sheet
 /// lists them.
 struct CanvasCommands: Commands {
@@ -64,6 +66,10 @@ struct CanvasCommands: Commands {
             Button("Delete With Everything Under It") { editing?.deleteBranch() }
                 .disabled(editing?.hasSelection != true)
             Divider()
+            Button(editing?.linkMode == true ? "Stop Link Mode" : ShortcutCatalog.linkMode.title) {
+                editing?.toggleLinkMode()
+            }
+            .disabled(editing == nil)
             Button(editing?.showsInspector == true ? "Hide Inspector" : "Show Inspector") {
                 editing?.toggleInspector()
             }
