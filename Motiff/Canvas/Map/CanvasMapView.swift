@@ -48,27 +48,7 @@ struct CanvasMapView: View {
     }
 
     var body: some View {
-        base
-            .bisect("pickers") { pickers($0) }
-            .bisect("keys") { keys($0) }
-            .bisect("overlays") { overlays($0) }
-            .bisect("panels") { panels($0) }
-            .bisect("chrome") { chrome($0) }
-            .bisect("observers") { observers($0) }
-            .bisect("values") { values($0) }
-    }
-
-    @ViewBuilder
-    private var base: some View {
-        #if DEBUG
-        if DebugLaunchRoute.bisectOff.contains("content") {
-            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            framedContent
-        }
-        #else
-        framedContent
-        #endif
+        values(observers(chrome(panels(overlays(keys(pickers(framedContent)))))))
     }
 
     private var framedContent: some View {
@@ -240,9 +220,11 @@ struct CanvasMapView: View {
             .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
     }
 
-    /// Menu actions, and the title.
+    /// Menu actions (the Mac's menu bar), and the title. Not on iPhone: nothing reads them there,
+    /// and publishing fresh actions on every update kept the view re-rendering before its first frame.
     private func values(_ content: some View) -> some View {
         content
+            #if os(macOS)
             .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
             .focusedSceneValue(\.canvasZoom, controller.viewMode == .map ? CanvasZoomActions(
                 zoomIn: controller.zoomIn,
@@ -278,6 +260,7 @@ struct CanvasMapView: View {
                 showsLibrary: controller.showsLibrary,
                 toggleLibrary: controller.toggleLibrary
             ))
+            #endif
             .navigationTitle(canvas.displayTitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -356,19 +339,6 @@ struct CanvasMapView: View {
     /// The categories and purposes bar. On iPhone it scrolls sideways when it doesn't fit.
     @ViewBuilder
     private var legend: some View {
-        #if DEBUG
-        if DebugLaunchRoute.bisectOff.contains("legend") {
-            EmptyView()
-        } else {
-            legendBar
-        }
-        #else
-        legendBar
-        #endif
-    }
-
-    @ViewBuilder
-    private var legendBar: some View {
         #if os(iOS)
         ScrollView(.horizontal, showsIndicators: false) {
             CategoryLegend(controller: controller)
@@ -996,22 +966,5 @@ private struct ZoomControl: View {
         .frame(height: 32)
         .background(Theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.cardBorder, lineWidth: 1))
-    }
-}
-
-private extension View {
-    /// Debug builds: `-MotiffBisect keys,panels` leaves those groups of the Canvas view's
-    /// modifiers off, to find which one misbehaves on a device.
-    @ViewBuilder
-    func bisect<Modified: View>(_ group: String, _ apply: (Self) -> Modified) -> some View {
-        #if DEBUG
-        if DebugLaunchRoute.bisectOff.contains(group) {
-            self
-        } else {
-            apply(self)
-        }
-        #else
-        apply(self)
-        #endif
     }
 }

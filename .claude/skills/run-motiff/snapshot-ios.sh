@@ -4,7 +4,6 @@
 #   snapshot-ios.sh <simulator udid> <out-dir> <route>...
 #   route: library | inbox | boards | canvases | canvas:<title>, then optional |-separated extras:
 #          select=<node title, or its start>  inspector  detail  filter=<category>  view=map|outline|graph  find=<text>
-#          bisect=<groups>  (Canvas view groups to leave off, comma-separated; see View.bisect)
 #   e.g.   "canvas:Product photography look|view=map"
 #
 # The app must already be installed (xcrun simctl install). Debug builds only: the launch
@@ -37,7 +36,6 @@ for route in "$@"; do
       filter=*) args+=(-MotiffFilter "${extra#filter=}") ;;
       view=*) args+=(-MotiffView "${extra#view=}") ;;
       find=*) args+=(-MotiffFind "${extra#find=}") ;;
-      bisect=*) args+=(-MotiffBisect "${extra#bisect=}") ;;
       *) echo "Unknown extra: $extra" >&2 ;;
     esac
   done
