@@ -31,6 +31,12 @@ struct CanvasEditActions {
     var copyPrompt: @MainActor () -> Void
     var viewMode: CanvasViewMode
     var setViewMode: @MainActor (CanvasViewMode) -> Void
+    var find: @MainActor () -> Void
+    var findNext: @MainActor () -> Void
+    var findPrevious: @MainActor () -> Void
+    var canFindNext: Bool
+    var showsMinimap: Bool
+    var toggleMinimap: @MainActor () -> Void
 }
 
 /// File › Import… (⌘O) in the focused Library or Canvas.
@@ -57,6 +63,11 @@ struct CanvasCommands: Commands {
     @FocusedValue(\.canvasEditing) private var editing
     @FocusedValue(\.showShortcuts) private var shortcuts
     @FocusedValue(\.importFiles) private var importFiles
+    @FocusedValue(\.showPalette) private var palette
+    @FocusedValue(\.debugActions) private var debug
+    #if DEBUG
+    @AppStorage("debug.fps") private var showsFrameRate = false
+    #endif
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -66,6 +77,10 @@ struct CanvasCommands: Commands {
             Button(ShortcutCatalog.importFiles.title) { importFiles?.run() }
                 .shortcut(ShortcutCatalog.importFiles)
                 .disabled(importFiles == nil)
+            Divider()
+            Button(ShortcutCatalog.goTo.title) { palette?.show() }
+                .shortcut(ShortcutCatalog.goTo)
+                .disabled(palette == nil)
         }
 
         CommandMenu("Canvas") {
@@ -77,6 +92,19 @@ struct CanvasCommands: Commands {
                 .shortcut(ShortcutCatalog.view(mode))
                 .disabled(editing == nil)
             }
+            Divider()
+            Button(ShortcutCatalog.find.title) { editing?.find() }
+                .shortcut(ShortcutCatalog.find)
+                .disabled(editing == nil)
+            Button(ShortcutCatalog.findNext.title) { editing?.findNext() }
+                .shortcut(ShortcutCatalog.findNext)
+                .disabled(editing?.canFindNext != true)
+            Button(ShortcutCatalog.findPrevious.title) { editing?.findPrevious() }
+                .shortcut(ShortcutCatalog.findPrevious)
+                .disabled(editing?.canFindNext != true)
+            Button(editing?.showsMinimap == true ? "Hide Minimap" : "Show Minimap") { editing?.toggleMinimap() }
+                .shortcut(ShortcutCatalog.minimap)
+                .disabled(editing == nil)
             Divider()
             Button(ShortcutCatalog.addNote.title) { editing?.addNote() }
                 .disabled(editing == nil)
@@ -107,6 +135,14 @@ struct CanvasCommands: Commands {
             .disabled(editing == nil)
         }
 
+        #if DEBUG
+        CommandMenu("Debug") {
+            Button("Generate 500-Node Canvas") { debug?.makeStressCanvas() }
+                .disabled(debug == nil)
+            Toggle("Show Frame Rate", isOn: $showsFrameRate)
+        }
+        #endif
+
         CommandGroup(replacing: .help) {
             Button(ShortcutCatalog.showShortcuts.title) { shortcuts?.show() }
                 .shortcut(ShortcutCatalog.showShortcuts)
@@ -115,3 +151,32 @@ struct CanvasCommands: Commands {
     }
 }
 #endif
+
+/// Something asked of the open Canvas from outside it, e.g. by the ⌘K palette.
+/// `canvasID` says which Canvas it's for; each request is new, so the same one can be asked twice.
+struct CanvasRequest: Equatable {
+    enum Action: Equatable {
+        case focus(UUID)
+        case view(CanvasViewMode)
+        case addNote, addSubIdea, find, toggleInspector, toggleLinkMode, toggleMinimap
+    }
+
+    let id = UUID()
+    let canvasID: UUID
+    let action: Action
+}
+
+/// File › Go To… (⌘K).
+struct PaletteAction {
+    var show: @MainActor () -> Void
+}
+
+/// Debug › Generate 500-Node Canvas.
+struct DebugActions {
+    var makeStressCanvas: @MainActor () -> Void
+}
+
+extension FocusedValues {
+    @Entry var showPalette: PaletteAction?
+    @Entry var debugActions: DebugActions?
+}

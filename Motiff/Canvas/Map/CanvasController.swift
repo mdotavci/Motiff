@@ -64,6 +64,17 @@ final class CanvasController {
         }
     }
 
+    /// ⌘F: the find bar is open, what's typed in it, the matching nodes in Outline order, and
+    /// which one ⌘G last went to.
+    private(set) var isSearching = false
+    private(set) var searchText = ""
+    private(set) var searchResults: [UUID] = []
+    private(set) var searchIndex: Int?
+
+    /// ⌥⌘M. Remembered across launches.
+    private(set) var showsMinimap = UserDefaults.standard.object(forKey: "canvas.minimap") as? Bool ?? true
+    static let minimapKey = "canvas.minimap"
+
     /// Map, Outline or Graph (⌘1 ⌘2 ⌘3).
     private(set) var viewMode: CanvasViewMode = .map
     /// Outline rows whose children are folded away.
@@ -116,6 +127,10 @@ final class CanvasController {
         applyLaunchSelection()
         applyLaunchFilter()
         if let mode = DebugLaunchRoute.viewName.flatMap(CanvasViewMode.init(rawValue:)) { viewMode = mode }
+        if let text = DebugLaunchRoute.findText {
+            isSearching = true
+            searchText = text
+        }
         #endif
     }
 
@@ -131,6 +146,7 @@ final class CanvasController {
         let live = selection.filter { nodesByID[$0] != nil }
         if live != selection { selection = live }
         if let editingID, nodesByID[editingID] == nil { self.editingID = nil }
+        if isSearching { searchResults = CanvasSearch.matches(in: canvas, query: searchText) }
         let liveCategories = categoryFilter.intersection(canvas.categories.map(\.id))
         if liveCategories != categoryFilter { categoryFilter = liveCategories }
         let livePath = detailPath.filter { item in
@@ -293,7 +309,7 @@ final class CanvasController {
     /// let through; both, when both are on. Nil means nothing is dimmed.
     var highlighted: Set<UUID>? {
         let near = selection.isEmpty ? nil : snapshot.neighbors(of: selection)
-        let matches = snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+        let matches = filterMatches
         switch (near, matches) {
         case let (near?, matches?): return near.intersection(matches)
         case let (near?, nil): return near
@@ -305,7 +321,7 @@ final class CanvasController {
     /// Lines touching these stay at full strength: the selection, else what the filters match.
     var edgeFocus: Set<UUID>? {
         if !selection.isEmpty { return selection }
-        return snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+        return filterMatches
     }
 
     var isFiltering: Bool { !categoryFilter.isEmpty || !purposeFilter.isEmpty }
@@ -688,7 +704,94 @@ final class CanvasController {
     /// What the legend filters let through, nil when no filter is on. The Outline dims by this
     /// alone; the selection's neighbors mean little in a list.
     var filterMatches: Set<UUID>? {
-        snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+        let filtered = snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+        guard let found = searchMatches else { return filtered }
+        return filtered.map { $0.intersection(found) } ?? found
+    }
+
+    /// What ⌘F found, nil while the bar is closed or empty.
+    var searchMatches: Set<UUID>? {
+        guard isSearching, !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return Set(searchResults)
+    }
+
+    // MARK: Find
+
+    func openFind() {
+        endEditing()
+        isSearching = true
+    }
+
+    func closeFind() {
+        isSearching = false
+        searchText = ""
+        searchResults = []
+        searchIndex = nil
+    }
+
+    func setSearchText(_ text: String) {
+        searchText = text
+        searchResults = CanvasSearch.matches(in: canvas, query: text)
+        searchIndex = nil
+    }
+
+    /// Return or ⌘G: the next match (⇧⌘G the previous), selected and brought into view. On the
+    /// Map, a match is zoomed to at least 80% so it can be read.
+    func findNext(by step: Int = 1) {
+        guard !searchResults.isEmpty else {
+            Self.refuse()
+            return
+        }
+        let next = ((searchIndex ?? (step > 0 ? -1 : 0)) + step + searchResults.count) % searchResults.count
+        searchIndex = next
+        let id = searchResults[next]
+        endEditing()
+        selection = [id]
+        guard viewMode == .map, let rect = snapshot.node(id)?.rect else { return }
+        isAutoFitted = false
+        if camera.zoom < 0.8 {
+            move(to: CanvasCamera(center: CGPoint(x: rect.midX, y: rect.midY), zoom: 0.8))
+        } else {
+            reveal(id)
+        }
+    }
+
+    // MARK: Minimap and far zoom
+
+    func toggleMinimap() {
+        showsMinimap.toggle()
+        UserDefaults.standard.set(showsMinimap, forKey: Self.minimapKey)
+    }
+
+    /// Below `CanvasLayout.blockZoom` cards are drawn as plain blocks.
+    var isFarZoom: Bool { camera.zoom < CanvasLayout.blockZoom }
+
+    /// Click or drag in the minimap: look at that canvas point.
+    func center(on point: CGPoint) {
+        isAutoFitted = false
+        move(to: CanvasCamera(center: point, zoom: camera.zoom))
+    }
+
+    // MARK: Requests
+
+    /// Something asked from outside the Canvas view, e.g. by the ⌘K palette.
+    func perform(_ action: CanvasRequest.Action) {
+        switch action {
+        case .focus(let id):
+            guard node(id) != nil else { return }
+            while isShowingDetail { closeDetail() }
+            endEditing()
+            selection = [id]
+            pendingRevealID = id
+            revealPending()
+        case .view(let mode): setViewMode(mode)
+        case .addNote: addNote()
+        case .addSubIdea: addSubIdea()
+        case .find: openFind()
+        case .toggleInspector: toggleInspector()
+        case .toggleLinkMode: toggleLinkMode()
+        case .toggleMinimap: toggleMinimap()
+        }
     }
 
     // MARK: Outline

@@ -8,6 +8,10 @@ struct LibraryView: View {
     @Query(sort: \Board.name) private var boards: [Board]
     @AppStorage(LibraryDensity.storageKey) private var densityLevel = LibraryDensity.defaultLevel
 
+    /// A Reference to open, asked for from outside (the ⌘K palette); cleared once opened.
+    var pending: Binding<Reference?> = .constant(nil)
+
+    @State private var path: [Reference] = []
     @State private var availableWidth: CGFloat = 0
     @State private var pendingDelete: Reference?
     /// Show only prompts with this purpose; nil shows everything.
@@ -18,7 +22,7 @@ struct LibraryView: View {
     @State private var justSaved: [Reference] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             content
                 .navigationTitle("Library")
                 #if os(macOS)
@@ -53,10 +57,18 @@ struct LibraryView: View {
                     Task { await capture(urls.map { CaptureItem.file($0) }) }
                 }
                 .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
+                .onAppear(perform: openPending)
+                .onChange(of: pending.wrappedValue?.id) { openPending() }
                 .sheet(isPresented: isAskingWhy) {
                     WhySheet(references: justSaved)
                 }
         }
+    }
+
+    private func openPending() {
+        guard let reference = pending.wrappedValue else { return }
+        pending.wrappedValue = nil
+        path = [reference]
     }
 
     private var isAskingWhy: Binding<Bool> {

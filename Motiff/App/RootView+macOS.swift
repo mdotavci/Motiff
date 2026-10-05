@@ -43,12 +43,20 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.undoManager) private var undoManager
     @Query(sort: \Canvas.createdAt) private var canvases: [Canvas]
+    @Query(sort: \Reference.createdAt, order: .reverse) private var references: [Reference]
+    @FocusedValue(\.importFiles) private var importFiles
 
     @State private var selection: SidebarSelection? = .library
     @State private var renaming: Canvas?
     @State private var draftTitle = ""
     @State private var pendingDelete: Canvas?
     @State private var showsShortcuts = false
+    /// The ⌘K palette's items while it's open.
+    @State private var paletteItems: [PaletteItem]?
+    /// Asked of a Canvas by the palette; the Canvas clears it once done.
+    @State private var canvasRequest: CanvasRequest?
+    /// A Reference the palette asked the Library to open.
+    @State private var libraryReference: Reference?
 
     var body: some View {
         NavigationSplitView {
@@ -88,6 +96,21 @@ struct RootView: View {
         .tint(.primary)
         .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas))
         .focusedSceneValue(\.showShortcuts, ShortcutsAction { showsShortcuts = true })
+        .focusedSceneValue(\.showPalette, PaletteAction(show: showPalette))
+        #if DEBUG
+        .focusedSceneValue(\.debugActions, DebugActions(makeStressCanvas: makeStressCanvas))
+        #endif
+        .overlay(alignment: .top) {
+            if let items = paletteItems {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.06)
+                        .ignoresSafeArea()
+                        .onTapGesture { paletteItems = nil }
+                    CommandPalette(items: items) { paletteItems = nil }
+                        .padding(.top, 72)
+                }
+            }
+        }
         .sheet(isPresented: $showsShortcuts) {
             ShortcutHelpView()
         }
@@ -129,13 +152,13 @@ struct RootView: View {
             CanvasGraphOverview { canvas in selection = .canvas(canvas.id) }
         case .canvas(let id):
             if let canvas = canvases.first(where: { $0.id == id }) {
-                CanvasMapView(canvas: canvas)
+                CanvasMapView(canvas: canvas, request: $canvasRequest)
                     .id(canvas.id)
             } else {
                 EmptyState(title: "Canvas", message: "This canvas was deleted.")
             }
         case .library, nil:
-            LibraryView()
+            LibraryView(pending: $libraryReference)
         }
     }
 
@@ -145,6 +168,31 @@ struct RootView: View {
 
     private var isConfirmingDelete: Binding<Bool> {
         Binding { pendingDelete != nil } set: { if !$0 { pendingDelete = nil } }
+    }
+
+    /// ⌘K. Built now, while the Canvas or Library still has the keyboard, so their actions
+    /// (like Import) are included.
+    private func showPalette() {
+        var openCanvasID: UUID?
+        if case let .canvas(id) = selection { openCanvasID = id }
+        paletteItems = PaletteItems.make(PaletteItems.Sources(
+            canvases: canvases,
+            references: references,
+            openCanvasID: openCanvasID,
+            openCanvas: { canvas in selection = .canvas(canvas.id) },
+            request: { canvasID, action in
+                selection = .canvas(canvasID)
+                canvasRequest = CanvasRequest(canvasID: canvasID, action: action)
+            },
+            openReference: { reference in
+                selection = .library
+                libraryReference = reference
+            },
+            newCanvas: newCanvas,
+            importFiles: importFiles?.run,
+            showShortcuts: { showsShortcuts = true },
+            showCanvasGraph: { selection = .canvasGraph }
+        ))
     }
 
     private func newCanvas() {
@@ -160,11 +208,21 @@ struct RootView: View {
     }
 
     #if DEBUG
+    /// Debug › Generate 500-Node Canvas.
+    private func makeStressCanvas() {
+        let canvas = CanvasStress.make(in: context, references: Array(references.prefix(12)))
+        selection = .canvas(canvas.id)
+    }
+
     /// Opens the screen named by `-MotiffOpen`, then saves a snapshot if `-MotiffSnapshot` asks.
     private func applyLaunchRoute() async {
         guard let route = DebugLaunchRoute.open else { return }
         // Seeding also runs at launch; give it a moment so a seeded Canvas can be found.
         try? await Task.sleep(for: .seconds(1.5))
+        if DebugLaunchRoute.makesStressCanvas {
+            let references = (try? context.fetch(FetchDescriptor<Reference>())) ?? []
+            CanvasStress.make(in: context, references: Array(references.prefix(12)))
+        }
         let all = (try? context.fetch(FetchDescriptor<Canvas>())) ?? []
         selection = DebugLaunchRoute.selection(for: route, canvases: all)
         showsShortcuts = DebugLaunchRoute.showsShortcuts

@@ -15,6 +15,8 @@ import AppKit
 ///     -MotiffPaste <text>        on a Canvas, pastes the text onto the selected Idea
 ///     -MotiffFilter <category>   on a Canvas, filters the legend to that category
 ///     -MotiffView outline|graph  on a Canvas, opens that view
+///     -MotiffFind <text>         on a Canvas, opens the find bar with that text
+///     -MotiffStress YES          makes the 500-node Canvas first
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
@@ -33,6 +35,14 @@ enum DebugLaunchRoute {
 
     static var showsInspector: Bool {
         UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var findText: String? {
+        UserDefaults.standard.string(forKey: "MotiffFind")
+    }
+
+    static var makesStressCanvas: Bool {
+        UserDefaults.standard.bool(forKey: "MotiffStress")
     }
 
     static var viewName: String? {

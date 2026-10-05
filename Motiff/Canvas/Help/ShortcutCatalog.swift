@@ -68,6 +68,7 @@ enum ShortcutCatalog {
 
     static let newCanvas = Shortcut("New Canvas", "n", .command)
     static let showShortcuts = Shortcut("Keyboard Shortcuts", "/", .command)
+    static let goTo = Shortcut("Go To…", "k", .command)
     static let undo = Shortcut("Undo", "z", .command)
     static let redo = Shortcut("Redo", "z", [.command, .shift])
 
@@ -109,6 +110,15 @@ enum ShortcutCatalog {
     static let move = Shortcut("Move (an Idea brings its cards)", pointer: "Drag")
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
+
+    // MARK: Canvas: finding
+
+    static let find = Shortcut("Find…", "f", .command)
+    static let findNext = Shortcut("Find Next", "g", .command)
+    static let findPrevious = Shortcut("Find Previous", "g", [.command, .shift])
+    static let closeFind = Shortcut("Close Find", .escape)
+    static let minimap = Shortcut("Show or Hide the Minimap", "m", [.command, .option])
+    static let minimapMove = Shortcut("Look Somewhere Else", pointer: "Click or drag in the minimap")
 
     // MARK: Canvas: views
 
@@ -160,7 +170,7 @@ enum ShortcutCatalog {
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
 
     static let sections: [ShortcutSection] = [
-        ShortcutSection(title: "Motiff", items: [newCanvas, undo, redo, showShortcuts]),
+        ShortcutSection(title: "Motiff", items: [newCanvas, goTo, undo, redo, showShortcuts]),
         ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
         ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
@@ -168,6 +178,7 @@ enum ShortcutCatalog {
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
         ]),
+        ShortcutSection(title: "Canvas finding", items: [find, findNext, findPrevious, closeFind, minimap, minimapMove]),
         ShortcutSection(title: "Canvas views", items: [
             mapView, outlineView, graphView, outlineStep, outlineFold, outlineIndent, outlineOutdent,
             outlineMoveUp, outlineMoveDown, graphShowOnMap, graphOpen,

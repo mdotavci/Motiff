@@ -59,6 +59,8 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Capture | `Capture/CaptureService` for both Library and Canvas: files are copied into Media, image addresses downloaded, other pages become Link cards (title and icon via LinkPresentation), text becomes a prompt with a guessed purpose. Media is Found; pasted prompts are Mine | One path in, so the Library and the Canvas can't drift |
 | Filters | The legend's category and purpose chips dim everything else (never hide it); 1–9 give the selection a category, 0 removes it | The map keeps its shape while you look at one part of it |
 | Views | Map, Outline and Graph are three views of one Canvas sharing the selection, inspector, detail and keys (⌘1 ⌘2 ⌘3). The Outline restructures (Tab, ⇧Tab, ⌥⌘↑↓); the Graph is a force layout seeded from Map positions, computed off the main actor | One model, three lenses; nothing is copied |
+| Far zoom | Below 45% the Map draws every node in one `Canvas` pass (blocks and circles, titles when they fit) and keeps only invisible hit views | Hundreds of nodes without hundreds of card views and thumbnails |
+| Palette | ⌘K ranks actions, Canvases, every node on every Canvas, and Library References by fuzzy match; it drives the open Canvas through a `CanvasRequest` | One place to go anywhere |
 | Undo | SwiftData's context uses the window's undo manager; a drag is one step; looking around (the viewport) isn't recorded | ⌘Z undoes edits, not panning |
 
 1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
@@ -69,7 +71,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 6. Drag and paste onto the Map (shares capture with step 4 above) *(done)*
 7. Category legend and filters; purpose filter in the Canvas and the Library *(done)*
 8. Outline view, Graph view, cross-canvas graph *(done)*
-9. ⌘K palette, search, minimap, semantic zoom, performance pass
+9. ⌘K palette, search, minimap, semantic zoom, performance pass *(done; 60 fps to be checked on the M1)*
 10. iPhone: Canvases tab, Outline first, touch Map
 
 ## Phase 2 — iPhone

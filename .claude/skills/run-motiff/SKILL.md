@@ -45,7 +45,8 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
 - `-MotiffSelect <title>` selects that node on the opened Canvas (exact title, else the first
   that starts with it); `-MotiffInspector YES` opens the inspector; `-MotiffDetail YES` opens
   the selected node full size; `-MotiffPaste <text>` pastes onto the selected Idea;
-  `-MotiffFilter <category>` filters the legend; `-MotiffView outline|graph` switches view; `-MotiffShortcuts YES` opens the keyboard
+  `-MotiffFilter <category>` filters the legend; `-MotiffView outline|graph` switches view; `-MotiffFind <text>` opens the find bar;
+  `-MotiffStress YES` makes the 500-node Canvas ("500 nodes") first; `-MotiffShortcuts YES` opens the keyboard
   shortcuts sheet.
 
 In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:

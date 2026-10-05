@@ -73,6 +73,9 @@ targets:
       - Motiff/Capture/PromptPurposeGuess.swift
       - Motiff/Canvas/Outline/CanvasOutline.swift
       - Motiff/Canvas/Graph/ForceLayout.swift
+      - Motiff/Canvas/Palette/FuzzyMatch.swift
+      - Motiff/Canvas/Search/CanvasSearch.swift
+      - Motiff/Canvas/Debug/CanvasStress.swift
       - Motiff/Storage
       - Shared
     settings:

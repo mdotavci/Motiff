@@ -13,6 +13,9 @@ enum CanvasLayout {
     static let noteSize = CGSize(width: 224, height: 112)
     static let linkSize = CGSize(width: 224, height: 72)
 
+    /// Below this zoom the Map draws plain colored blocks instead of cards.
+    static let blockZoom: CGFloat = 0.45
+
     /// 0 for a root, 1 for a sub-idea or a loose Idea, 2 for anything deeper.
     static func ideaLevel(isRoot: Bool, depth: Int) -> Int {
         isRoot ? 0 : min(max(depth, 1), ideaDiameters.count - 1)

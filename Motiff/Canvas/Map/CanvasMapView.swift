@@ -10,6 +10,8 @@ import AppKit
 /// around the pointer. Click selects, drag moves, Tab and ⌘Return add, Return edits in place.
 struct CanvasMapView: View {
     let canvas: Canvas
+    /// Asked of this Canvas from outside, e.g. by the ⌘K palette; cleared once done.
+    @Binding var request: CanvasRequest?
 
     @State private var controller: CanvasController
     @State private var lastDrag: CGSize = .zero
@@ -18,12 +20,16 @@ struct CanvasMapView: View {
     @State private var labelingEdge: CanvasSnapshot.Edge?
     @State private var labelDraft = ""
     @State private var isImporting = false
+    #if DEBUG
+    @AppStorage("debug.fps") private var showsFrameRate = false
+    #endif
 
     /// The Map's own coordinate space, so node drags measure against something that stays put.
     private static let space = "canvas.map"
 
-    init(canvas: Canvas) {
+    init(canvas: Canvas, request: Binding<CanvasRequest?> = .constant(nil)) {
         self.canvas = canvas
+        _request = request
         _controller = State(initialValue: CanvasController(canvas: canvas))
     }
 
@@ -55,6 +61,19 @@ struct CanvasMapView: View {
             ) { press in
                 handleKey(press)
             }
+            .overlay(alignment: .top) {
+                if controller.isSearching {
+                    FindBar(controller: controller)
+                        .padding(.top, Theme.gutter + (controller.viewMode == .outline ? 48 : 44))
+                }
+            }
+            #if DEBUG
+            .overlay(alignment: .bottom) {
+                if showsFrameRate {
+                    FrameRateMeter().padding(Theme.gutter)
+                }
+            }
+            #endif
             .alert("Label", isPresented: isLabeling) {
                 TextField("Label", text: $labelDraft)
                 Button("Save") {
@@ -96,9 +115,14 @@ struct CanvasMapView: View {
             .onAppear {
                 controller.reload()
                 if controller.editingID == nil { mapFocused = true }
+                handleRequest()
                 #if DEBUG
                 controller.applyLaunchPaste()
                 #endif
+            }
+            .onChange(of: request) { handleRequest() }
+            .onChange(of: controller.isSearching) { _, searching in
+                if !searching { mapFocused = true }
             }
             .onChange(of: canvas.updatedAt) { controller.reload() }
             .onChange(of: controller.editingID) { _, editing in
@@ -138,7 +162,13 @@ struct CanvasMapView: View {
                 canCopyPrompt: controller.promptToCopy != nil,
                 copyPrompt: controller.copyPrompt,
                 viewMode: controller.viewMode,
-                setViewMode: controller.setViewMode
+                setViewMode: controller.setViewMode,
+                find: controller.openFind,
+                findNext: { controller.findNext() },
+                findPrevious: { controller.findNext(by: -1) },
+                canFindNext: !controller.searchResults.isEmpty,
+                showsMinimap: controller.showsMinimap,
+                toggleMinimap: controller.toggleMinimap
             ))
             .navigationTitle(canvas.displayTitle)
     }
@@ -181,6 +211,8 @@ struct CanvasMapView: View {
         let dragging = controller.drag?.ids ?? []
         let highlighted = controller.highlighted
         let targetID = controller.connect?.targetID
+        let visible = controller.visibleNodes(in: shown)
+        let far = controller.isFarZoom
         return ZStack(alignment: .topLeading) {
             Theme.canvasGround
                 .contentShape(Rectangle())
@@ -196,7 +228,11 @@ struct CanvasMapView: View {
                 focus: controller.edgeFocus
             )
 
-            ForEach(controller.visibleNodes(in: shown)) { geometry in
+            if far {
+                BlockLayer(nodes: visible, camera: camera, highlighted: highlighted)
+            }
+
+            ForEach(visible) { geometry in
                 if let node = controller.node(geometry.id) {
                     placedNode(
                         node,
@@ -207,7 +243,8 @@ struct CanvasMapView: View {
                         isTarget: node.id == targetID || node.id == controller.linkSourceID
                             || node.id == controller.dropTargetID,
                         isHovered: node.id == controller.hoveredNodeID,
-                        isDimmed: highlighted.map { !$0.contains(node.id) } ?? false
+                        isDimmed: highlighted.map { !$0.contains(node.id) } ?? false,
+                        isFar: far
                     )
                 }
             }
@@ -250,6 +287,12 @@ struct CanvasMapView: View {
             ZoomControl(controller: controller)
                 .padding(Theme.gutter)
         }
+        .overlay(alignment: .bottomLeading) {
+            if controller.showsMinimap, !controller.snapshot.nodes.isEmpty {
+                Minimap(controller: controller)
+                    .padding(Theme.gutter)
+            }
+        }
         .overlay(alignment: .top) {
             if controller.linkMode {
                 LinkModePill(hasSource: controller.linkSourceID != nil)
@@ -262,6 +305,12 @@ struct CanvasMapView: View {
             }
         }
         .onAppear { controller.revealPending() }
+    }
+
+    private func handleRequest() {
+        guard let request, request.canvasID == canvas.id else { return }
+        self.request = nil
+        controller.perform(request.action)
     }
 
     /// ⇧Tab arrives as the back-tab character.
@@ -277,19 +326,27 @@ struct CanvasMapView: View {
         isDragging: Bool,
         isTarget: Bool,
         isHovered: Bool,
-        isDimmed: Bool
+        isDimmed: Bool,
+        isFar: Bool
     ) -> some View {
         let isEditing = controller.editingID == node.id
         let isSelected = controller.selection.contains(node.id)
         // While typing, clicks and drags belong to the text field.
         let mask: GestureMask = isEditing ? .subviews : .all
-        return NodeView(
-            node: node,
-            size: geometry.rect.size,
-            zoom: camera.zoom,
-            editor: isEditing ? controller : nil,
-            isPlaying: isHovered && controller.drag == nil
-        )
+        return Group {
+            if isFar && !isEditing {
+                // Drawn by the BlockLayer; this only takes clicks and drags.
+                Color.clear
+            } else {
+                NodeView(
+                    node: node,
+                    size: geometry.rect.size,
+                    zoom: camera.zoom,
+                    editor: isEditing ? controller : nil,
+                    isPlaying: isHovered && controller.drag == nil
+                )
+            }
+        }
             .frame(width: geometry.rect.width, height: geometry.rect.height)
             .overlay {
                 if isSelected || isTarget {
@@ -392,6 +449,10 @@ struct CanvasMapView: View {
     /// Keys the Map handles itself. While a text field has the keyboard they're left to it.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
         guard controller.editingID == nil else { return .ignored }
+        if controller.isSearching, press.key == .escape {
+            controller.closeFind()
+            return .handled
+        }
         if controller.isShowingDetail {
             switch press.key {
             case .escape, .space: controller.closeDetail()
