@@ -48,6 +48,30 @@ struct CanvasMapView: View {
     }
 
     var body: some View {
+        base
+            .bisect("pickers") { pickers($0) }
+            .bisect("keys") { keys($0) }
+            .bisect("overlays") { overlays($0) }
+            .bisect("panels") { panels($0) }
+            .bisect("chrome") { chrome($0) }
+            .bisect("observers") { observers($0) }
+            .bisect("values") { values($0) }
+    }
+
+    @ViewBuilder
+    private var base: some View {
+        #if DEBUG
+        if DebugLaunchRoute.bisectOff.contains("content") {
+            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            framedContent
+        }
+        #else
+        framedContent
+        #endif
+    }
+
+    private var framedContent: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             #if os(macOS)
@@ -57,6 +81,11 @@ struct CanvasMapView: View {
                 Task { await controller.capture(providers, at: nil, onto: target) }
             }
             #endif
+    }
+
+    /// File, photo and Library pickers.
+    private func pickers(_ content: some View) -> some View {
+        content
             .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
                 let point = importPoint
                 importPoint = nil
@@ -81,6 +110,11 @@ struct CanvasMapView: View {
                 .presentationDetents([.medium, .large])
             }
             #endif
+    }
+
+    /// The keyboard: focus and keys.
+    private func keys(_ content: some View) -> some View {
+        content
             .focusable()
             .focused($mapFocused)
             .focusEffectDisabled()
@@ -95,6 +129,11 @@ struct CanvasMapView: View {
             ) { press in
                 handleKey(press)
             }
+    }
+
+    /// The find bar and the frame-rate readout.
+    private func overlays(_ content: some View) -> some View {
+        content
             .overlay(alignment: .top) {
                 if controller.isSearching {
                     FindBar(controller: controller)
@@ -108,6 +147,11 @@ struct CanvasMapView: View {
                 }
             }
             #endif
+    }
+
+    /// The label alert, the open node, and the inspector.
+    private func panels(_ content: some View) -> some View {
+        content
             .alert("Label", isPresented: isLabeling) {
                 TextField("Label", text: $labelDraft)
                 Button("Save") {
@@ -149,7 +193,17 @@ struct CanvasMapView: View {
                     .presentationDetents([.medium, .large])
             }
             #endif
+    }
+
+    /// Toolbar.
+    private func chrome(_ content: some View) -> some View {
+        content
             .toolbar { toolbar }
+    }
+
+    /// Appearing, and keeping up with changes and undo.
+    private func observers(_ content: some View) -> some View {
+        content
             .onAppear {
                 controller.reload()
                 if controller.editingID == nil { mapFocused = true }
@@ -184,6 +238,11 @@ struct CanvasMapView: View {
             #endif
             .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
             .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
+    }
+
+    /// Menu actions, and the title.
+    private func values(_ content: some View) -> some View {
+        content
             .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
             .focusedSceneValue(\.canvasZoom, controller.viewMode == .map ? CanvasZoomActions(
                 zoomIn: controller.zoomIn,
@@ -297,6 +356,19 @@ struct CanvasMapView: View {
     /// The categories and purposes bar. On iPhone it scrolls sideways when it doesn't fit.
     @ViewBuilder
     private var legend: some View {
+        #if DEBUG
+        if DebugLaunchRoute.bisectOff.contains("legend") {
+            EmptyView()
+        } else {
+            legendBar
+        }
+        #else
+        legendBar
+        #endif
+    }
+
+    @ViewBuilder
+    private var legendBar: some View {
         #if os(iOS)
         ScrollView(.horizontal, showsIndicators: false) {
             CategoryLegend(controller: controller)
@@ -924,5 +996,22 @@ private struct ZoomControl: View {
         .frame(height: 32)
         .background(Theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.cardBorder, lineWidth: 1))
+    }
+}
+
+private extension View {
+    /// Debug builds: `-MotiffBisect keys,panels` leaves those groups of the Canvas view's
+    /// modifiers off, to find which one misbehaves on a device.
+    @ViewBuilder
+    func bisect<Modified: View>(_ group: String, _ apply: (Self) -> Modified) -> some View {
+        #if DEBUG
+        if DebugLaunchRoute.bisectOff.contains(group) {
+            self
+        } else {
+            apply(self)
+        }
+        #else
+        apply(self)
+        #endif
     }
 }

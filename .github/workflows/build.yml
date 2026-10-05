@@ -83,7 +83,17 @@ jobs:
             "canvas:Product photography look|select=Light|detail" \
             "canvas:Product photography look|select=Light|inspector" \
             "canvas:Product photography look|view=graph" \
-            boards
+            boards \
+            "canvas:Product photography look|bisect=content" \
+            "canvas:Product photography look|bisect=legend" \
+            "canvas:Product photography look|bisect=pickers" \
+            "canvas:Product photography look|bisect=keys" \
+            "canvas:Product photography look|bisect=overlays" \
+            "canvas:Product photography look|bisect=panels" \
+            "canvas:Product photography look|bisect=chrome" \
+            "canvas:Product photography look|bisect=observers" \
+            "canvas:Product photography look|bisect=values" \
+            "canvas:Product photography look|bisect=pickers,keys,overlays,panels,chrome,observers,values"
 
       # Pushed to ci-snapshots/<branch>-ios, next to the Mac ones.
       - name: Publish snapshots

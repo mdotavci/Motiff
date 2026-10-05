@@ -66,6 +66,11 @@ enum DebugLaunchRoute {
         UserDefaults.standard.bool(forKey: "MotiffDrawer")
     }
 
+    /// `-MotiffBisect a,b`: groups of the Canvas view to leave off (see `View.bisect`).
+    static var bisectOff: Set<String> {
+        Set((UserDefaults.standard.string(forKey: "MotiffBisect") ?? "").split(separator: ",").map(String.init))
+    }
+
     static var showsShortcuts: Bool {
         UserDefaults.standard.bool(forKey: "MotiffShortcuts")
     }
