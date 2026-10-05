@@ -55,6 +55,10 @@ In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:
 `snapshot-mac.sh <Motiff.app> <out-dir> <route>...` launches the app once per route with both and
 collects the PNGs. CI calls it after the build.
 
+iPhone: `snapshot-ios.sh <simulator udid> <out-dir> <route>...` relaunches the installed app per
+route and screenshots the simulator (extra route `canvases`; a Canvas opens in the Outline, so add
+`view=map` for the Map). CI pushes them to `ci-snapshots/<branch>-ios`.
+
 ## Human path: on a Mac
 
 From the repo root (the folder with `project.yml`, not the `Motiff/` sources folder inside it):

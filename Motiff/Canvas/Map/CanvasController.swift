@@ -111,12 +111,13 @@ final class CanvasController {
     /// Room around the view edge where nodes are kept mounted, in view points.
     static let cullMargin: CGFloat = 200
 
-    init(canvas: Canvas) {
+    init(canvas: Canvas, viewMode: CanvasViewMode = .map) {
         self.canvas = canvas
         let viewport = canvas.viewport
         camera = CanvasCamera(center: CGPoint(x: viewport.centerX, y: viewport.centerY), zoom: viewport.zoom)
         // A Canvas that has never been looked at opens fitted to its content.
         needsFit = viewport == .initial
+        self.viewMode = viewMode
 
         // A brand-new Canvas opens with its root Idea ready to be named.
         if canvas.title.isEmpty, canvas.nodes.count == 1, let root = canvas.roots.first, (root.title ?? "").isEmpty {
@@ -431,6 +432,13 @@ final class CanvasController {
         showsInspector.toggle()
     }
 
+    /// Selects just this node, e.g. before acting on it from its menu.
+    func select(_ id: UUID) {
+        guard editingID != id else { return }
+        endEditing()
+        selection = [id]
+    }
+
     // MARK: Adding
 
     /// Tab: a Note on the selected Idea (or the selected card's Idea, or the root), typed into.
@@ -595,6 +603,14 @@ final class CanvasController {
         endEditing()
         linkMode.toggle()
         linkSourceID = nil
+    }
+
+    /// The node menu's Link To…: link mode, with this node already picked as the first.
+    func startLink(from id: UUID) {
+        endEditing()
+        linkMode = true
+        linkSourceID = id
+        selection = [id]
     }
 
     private func makeLink(from sourceID: UUID, to targetID: UUID) {
@@ -972,6 +988,11 @@ final class CanvasController {
             selection = [id]
             reveal(id)
         }
+    }
+
+    /// The detail sheet swiped away (iPhone): back to the Canvas, with the last node selected.
+    func closeAllDetail() {
+        while isShowingDetail { closeDetail() }
     }
 
     /// ← / →: the previous or next node at the same level, in sibling order.

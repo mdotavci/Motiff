@@ -15,6 +15,8 @@ struct CanvasMapView: View {
 
     @State private var controller: CanvasController
     @State private var lastDrag: CGSize = .zero
+    /// The pinch so far, so each change zooms by the step since the last one.
+    @State private var lastMagnification: CGFloat = 1
     @FocusState private var mapFocused: Bool
     /// The line whose label is being typed in the Label… alert.
     @State private var labelingEdge: CanvasSnapshot.Edge?
@@ -27,10 +29,11 @@ struct CanvasMapView: View {
     /// The Map's own coordinate space, so node drags measure against something that stays put.
     private static let space = "canvas.map"
 
-    init(canvas: Canvas, request: Binding<CanvasRequest?> = .constant(nil)) {
+    /// `viewMode`: what it opens as; the Map on the Mac, the Outline on iPhone.
+    init(canvas: Canvas, request: Binding<CanvasRequest?> = .constant(nil), viewMode: CanvasViewMode = .map) {
         self.canvas = canvas
         _request = request
-        _controller = State(initialValue: CanvasController(canvas: canvas))
+        _controller = State(initialValue: CanvasController(canvas: canvas, viewMode: viewMode))
     }
 
     var body: some View {
@@ -83,6 +86,7 @@ struct CanvasMapView: View {
             } message: {
                 Text("A word or two on the line. Leave it empty to remove the label.")
             }
+            #if os(macOS)
             .overlay(alignment: .topLeading) {
                 // The open node grows out of its place on the Map and shrinks back into it.
                 ZStack {
@@ -93,25 +97,22 @@ struct CanvasMapView: View {
                 }
                 .animation(.snappy(duration: 0.32), value: controller.isShowingDetail)
             }
+            #else
+            // On iPhone the open node is a sheet over the whole screen; swipe down to go back.
+            .sheet(isPresented: Binding(get: { controller.isShowingDetail }, set: { if !$0 { controller.closeAllDetail() } })) {
+                if let item = controller.detailItem {
+                    CanvasDetailView(controller: controller, item: item)
+                        .presentationDetents([.large])
+                }
+            }
+            #endif
             .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
                 CanvasInspector(controller: controller)
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
+                    // On iPhone the inspector is a sheet: half height, pull up for all of it.
+                    .presentationDetents([.medium, .large])
             }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Picker("View", selection: Binding(get: { controller.viewMode }, set: { controller.setViewMode($0) })) {
-                        ForEach(CanvasViewMode.allCases) { mode in
-                            Label(mode.label, systemImage: mode.systemImage).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .help("Map, Outline or Graph (⌘1, ⌘2, ⌘3)")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Inspector", systemImage: "sidebar.right", action: controller.toggleInspector)
-                        .help("Show Inspector (\(ShortcutCatalog.inspector.keys))")
-                }
-            }
+            .toolbar { toolbar }
             .onAppear {
                 controller.reload()
                 if controller.editingID == nil { mapFocused = true }
@@ -171,6 +172,45 @@ struct CanvasMapView: View {
                 toggleMinimap: controller.toggleMinimap
             ))
             .navigationTitle(canvas.displayTitle)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        #if os(macOS)
+        ToolbarItem(placement: .primaryAction) {
+            viewPicker
+                .help("Map, Outline or Graph (⌘1, ⌘2, ⌘3)")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button("Inspector", systemImage: "sidebar.right", action: controller.toggleInspector)
+                .help("Show Inspector (\(ShortcutCatalog.inspector.keys))")
+        }
+        #else
+        ToolbarItem(placement: .principal) {
+            viewPicker
+                .labelStyle(.iconOnly)
+                .frame(width: 150)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Menu("Add", systemImage: "plus") {
+                Button("Add Note", systemImage: "note.text.badge.plus", action: controller.addNote)
+                Button("Add Sub-Idea", systemImage: "plus.circle", action: controller.addSubIdea)
+            }
+            Button("Inspector", systemImage: "info.circle", action: controller.toggleInspector)
+        }
+        #endif
+    }
+
+    private var viewPicker: some View {
+        Picker("View", selection: Binding(get: { controller.viewMode }, set: { controller.setViewMode($0) })) {
+            ForEach(CanvasViewMode.allCases) { mode in
+                Label(mode.label, systemImage: mode.systemImage).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
     }
 
     @ViewBuilder
@@ -180,8 +220,7 @@ struct CanvasMapView: View {
             map
         case .outline:
             VStack(alignment: .leading, spacing: 0) {
-                CategoryLegend(controller: controller)
-                    .padding(Theme.gutter)
+                legend
                 CanvasOutlineView(controller: controller) { mapFocused = true }
             }
             .background(.background)
@@ -197,10 +236,24 @@ struct CanvasMapView: View {
                 controller.openDetail(id)
             }
             .overlay(alignment: .topLeading) {
-                CategoryLegend(controller: controller)
-                    .padding(Theme.gutter)
+                legend
             }
         }
+    }
+
+    /// The categories and purposes bar. On iPhone it scrolls sideways when it doesn't fit.
+    @ViewBuilder
+    private var legend: some View {
+        #if os(iOS)
+        ScrollView(.horizontal, showsIndicators: false) {
+            CategoryLegend(controller: controller)
+                .padding(Theme.gutter)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        #else
+        CategoryLegend(controller: controller)
+            .padding(Theme.gutter)
+        #endif
     }
 
     /// The Map: lines, nodes, handles, the line being drawn; legend, zoom and link-mode pill on top.
@@ -277,11 +330,12 @@ struct CanvasMapView: View {
         .gesture(panGesture)
         #if os(macOS)
         .modifier(ScrollZoomMonitor(controller: controller))
+        #else
+        .simultaneousGesture(pinchGesture)
         #endif
         .onDrop(of: CaptureService.acceptedTypes, delegate: CanvasDropDelegate(controller: controller))
         .overlay(alignment: .topLeading) {
-            CategoryLegend(controller: controller)
-                .padding(Theme.gutter)
+            legend
         }
         .overlay(alignment: .bottomTrailing) {
             ZoomControl(controller: controller)
@@ -295,7 +349,7 @@ struct CanvasMapView: View {
         }
         .overlay(alignment: .top) {
             if controller.linkMode {
-                LinkModePill(hasSource: controller.linkSourceID != nil)
+                LinkModePill(hasSource: controller.linkSourceID != nil, stop: controller.toggleLinkMode)
                     .padding(.top, Theme.gutter + 44)
             }
         }
@@ -312,6 +366,13 @@ struct CanvasMapView: View {
         self.request = nil
         controller.perform(request.action)
     }
+
+    /// Big enough for a finger on iPhone.
+    #if os(iOS)
+    private static let handleSize: CGFloat = 22
+    #else
+    private static let handleSize: CGFloat = 12
+    #endif
 
     /// ⇧Tab arrives as the back-tab character.
     private static var backTab: KeyEquivalent { KeyEquivalent("\u{19}") }
@@ -357,6 +418,10 @@ struct CanvasMapView: View {
             // The one elevation in the app: something picked up.
             .shadow(color: .black.opacity(isDragging ? 0.28 : 0), radius: isDragging ? 14 : 0, y: isDragging ? 8 : 0)
             .contentShape(node.isIdea ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Theme.cardCorner)))
+            // Right-click on the Mac, long-press on iPhone.
+            .contextMenu {
+                if !isEditing { NodeMenu(node: node, controller: controller) }
+            }
             .gesture(TapGesture().onEnded {
                 controller.tap(node.id, extending: Self.shiftIsDown)
                 if controller.editingID == nil { mapFocused = true }
@@ -386,7 +451,7 @@ struct CanvasMapView: View {
         return Circle()
             .fill(Theme.cardSurface)
             .overlay(Circle().strokeBorder(Color.primary.opacity(0.6), lineWidth: 1.5))
-            .frame(width: 12, height: 12)
+            .frame(width: Self.handleSize, height: Self.handleSize)
             .padding(6)
             .contentShape(Circle())
             .position(camera.screenPoint(CGPoint(x: geometry.rect.maxX, y: geometry.rect.midY), in: size))
@@ -444,6 +509,16 @@ struct CanvasMapView: View {
                 controller.pan(by: delta)
             }
             .onEnded { _ in lastDrag = .zero }
+    }
+
+    /// Two fingers on iPhone: zoom around where the pinch started.
+    private var pinchGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                controller.zoom(by: value.magnification / lastMagnification, at: value.startLocation)
+                lastMagnification = value.magnification
+            }
+            .onEnded { _ in lastMagnification = 1 }
     }
 
     /// Keys the Map handles itself. While a text field has the keyboard they're left to it.
@@ -596,15 +671,35 @@ private struct ConnectLine: View {
 /// Shown while L link mode is on.
 private struct LinkModePill: View {
     let hasSource: Bool
+    let stop: () -> Void
 
     var body: some View {
+        #if os(iOS)
+        // No Esc key on a phone: the pill itself stops it.
+        Button(action: stop) {
+            HStack(spacing: 8) {
+                Text(hasSource ? "Link mode · tap the node to link to" : "Link mode · tap two nodes")
+                Text("Done").fontWeight(.semibold)
+            }
+            .modifier(PillStyle())
+        }
+        .buttonStyle(.plain)
+        #else
         Text(hasSource ? "Link mode · now click the node to link to · esc to stop" : "Link mode · click two nodes · esc to stop")
+            .modifier(PillStyle())
+            .allowsHitTesting(false)
+        #endif
+    }
+}
+
+private struct PillStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
             .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 12)
             .frame(height: 28)
             .background(Theme.cardSurface, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.cardBorder, lineWidth: 1))
-            .allowsHitTesting(false)
     }
 }
 

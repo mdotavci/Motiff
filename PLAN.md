@@ -62,6 +62,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Far zoom | Below 45% the Map draws every node in one `Canvas` pass (blocks and circles, titles when they fit) and keeps only invisible hit views | Hundreds of nodes without hundreds of card views and thumbnails |
 | Palette | ⌘K ranks actions, Canvases, every node on every Canvas, and Library References by fuzzy match; it drives the open Canvas through a `CanvasRequest` | One place to go anywhere |
 | Undo | SwiftData's context uses the window's undo manager; a drag is one step; looking around (the viewport) isn't recorded | ⌘Z undoes edits, not panning |
+| iPhone Canvas | Same `CanvasMapView` and controller as the Mac, opening in the Outline. One menu per node (long-press on iPhone, right-click on the Mac) carries the actions keys do on the Mac; detail and inspector are sheets; the legend scrolls sideways | One Canvas codebase; a phone gets menus where a Mac gets keys |
 
 1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
 2. Static Map: circles, cards, edges, category strips, purpose badges; pan and zoom *(done)*
@@ -72,7 +73,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 7. Category legend and filters; purpose filter in the Canvas and the Library *(done)*
 8. Outline view, Graph view, cross-canvas graph *(done)*
 9. ⌘K palette, search, minimap, semantic zoom, performance pass *(done; 60 fps to be checked on the M1)*
-10. iPhone: Canvases tab, Outline first, touch Map
+10. iPhone: Canvases tab, Outline first, touch Map *(done)*
 
 ## Phase 2 — iPhone
 

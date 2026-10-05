@@ -110,6 +110,7 @@ enum ShortcutCatalog {
     static let move = Shortcut("Move (an Idea brings its cards)", pointer: "Drag")
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
+    static let nodeMenu = Shortcut("Everything You Can Do to a Node", pointer: "Right-click it (long-press on iPhone)")
 
     // MARK: Canvas: finding
 
@@ -176,7 +177,7 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
-            delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
+            delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector, nodeMenu,
         ]),
         ShortcutSection(title: "Canvas finding", items: [find, findNext, findPrevious, closeFind, minimap, minimapMove]),
         ShortcutSection(title: "Canvas views", items: [

@@ -126,6 +126,10 @@ private struct OutlineRow: View {
         }
         .opacity(isDimmed ? 0.35 : 1)
         .contentShape(Rectangle())
+        // Right-click on the Mac, long-press on iPhone: the node's actions plus moving the row.
+        .contextMenu {
+            if !isEditing { NodeMenu(node: node, controller: controller, inOutline: true) }
+        }
         .gesture(TapGesture().onEnded {
             controller.tap(node.id, extending: CategoryLegend.shiftIsDown)
             if controller.editingID == nil { focusCanvas() }

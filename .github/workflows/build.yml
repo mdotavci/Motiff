@@ -13,6 +13,8 @@ jobs:
   ios:
     runs-on: macos-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -70,6 +72,38 @@ jobs:
           [ "$COUNT" -ge 12 ]
           echo "Seed data present"
 
+      # One simulator screenshot per route. Add routes here as screens arrive.
+      - name: Snapshots
+        run: |
+          .claude/skills/run-motiff/snapshot-ios.sh "$UDID" snapshots \
+            canvases \
+            "canvas:Product photography look" \
+            "canvas:Product photography look|view=map" \
+            "canvas:Product photography look|view=map|select=Light" \
+            "canvas:Product photography look|select=Light|detail" \
+            "canvas:Product photography look|select=Light|inspector" \
+            "canvas:Product photography look|view=graph"
+
+      # Pushed to ci-snapshots/<branch>-ios, next to the Mac ones.
+      - name: Publish snapshots
+        if: always() && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(ls -A snapshots 2>/dev/null)" ]; then echo "No snapshots"; exit 0; fi
+          BRANCH="ci-snapshots/$GITHUB_REF_NAME-ios"
+          cp launch.png snapshots/ 2>/dev/null || true
+          cd snapshots
+          printf 'Run %s\nCommit %s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > RUN.txt
+          git init -q -b snapshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "iOS snapshots for $GITHUB_SHA"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          echo "Pushed to $BRANCH"
+
       - name: Upload screenshot
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,6 +112,7 @@ jobs:
           path: |
             launch.png
             build.log
+            snapshots/
           if-no-files-found: ignore
 
   mac:
