@@ -30,7 +30,7 @@ final class Canvas {
 
 extension Canvas {
     var displayTitle: String {
-        title.isEmpty ? "Untitled canvas" : title
+        title.isEmpty ? "Untitled board" : title
     }
 
     var viewport: CanvasViewport {

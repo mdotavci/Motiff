@@ -35,7 +35,7 @@ struct CommandPalette: View {
             HStack(spacing: Theme.unit) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("Go to a Canvas, Idea or Reference, or do something", text: $query)
+                TextField("Go to a board, an item on one, or a Reference, or do something", text: $query)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)

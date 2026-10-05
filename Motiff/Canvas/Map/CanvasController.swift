@@ -1062,8 +1062,9 @@ final class CanvasController {
         if target != dropTargetID { dropTargetID = target }
     }
 
-    /// The Idea pasted and imported things attach to: the selected one, or the root.
-    var pasteTargetID: UUID? { anchorIdea?.id }
+    /// What pasted and imported things attach to: the selected node's Idea. With nothing
+    /// selected they land loose, in the middle of the view.
+    var pasteTargetID: UUID? { selectedNode?.id }
 
     /// Reads, prepares and places what was dropped or pasted.
     func capture(_ providers: [NSItemProvider], at viewPoint: CGPoint?, onto targetID: UUID?) async {

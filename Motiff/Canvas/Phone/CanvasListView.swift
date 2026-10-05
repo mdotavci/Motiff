@@ -2,10 +2,10 @@
 import SwiftData
 import SwiftUI
 
-/// The iPhone's Canvases tab: every Canvas, newest last, as on the Mac's sidebar. Tap one to open
-/// it in the Outline (the Map is one tap away); swipe for Rename and Delete; + makes a new one.
+/// The iPhone's Boards tab: every board, newest last, as on the Mac's sidebar. Tap one to open
+/// it on the Map; swipe for Rename and Delete; + makes a new one.
 struct CanvasListView: View {
-    /// The open Canvas, if any: a path of one, so the launch route can open it too.
+    /// The open board, if any: a path of one, so the launch route can open it too.
     @Binding var path: [UUID]
 
     @Environment(\.modelContext) private var context
@@ -22,7 +22,7 @@ struct CanvasListView: View {
                     NavigationLink(value: canvas.id) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(canvas.displayTitle)
-                            Text("\(canvas.nodes.count) nodes")
+                            Text(canvas.nodes.count == 1 ? "1 item" : "\(canvas.nodes.count) items")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -38,26 +38,26 @@ struct CanvasListView: View {
             }
             .overlay {
                 if canvases.isEmpty {
-                    EmptyState(title: "Canvases", message: "Tap + to start a Canvas: an Idea in the middle, with references, prompts and notes around it.")
+                    EmptyState(title: "Boards", message: "Tap + to start a board: pictures, prompts and notes for one idea, connected however you like.")
                         .padding(Theme.gutter)
                 }
             }
-            .navigationTitle("Canvases")
+            .navigationTitle("Boards")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("New Canvas", systemImage: "plus", action: newCanvas)
+                    Button("New Board", systemImage: "plus", action: newCanvas)
                 }
             }
             .navigationDestination(for: UUID.self) { id in
                 if let canvas = canvases.first(where: { $0.id == id }) {
-                    CanvasMapView(canvas: canvas, viewMode: .outline)
+                    CanvasMapView(canvas: canvas)
                         .id(canvas.id)
                 } else {
-                    EmptyState(title: "Canvas", message: "This canvas was deleted.")
+                    EmptyState(title: "Board", message: "This board was deleted.")
                 }
             }
         }
-        .alert("Rename Canvas", isPresented: isRenaming) {
+        .alert("Rename Board", isPresented: isRenaming) {
             TextField("Title", text: $draftTitle)
             Button("Rename") {
                 renaming?.title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -72,9 +72,9 @@ struct CanvasListView: View {
             titleVisibility: .visible,
             presenting: pendingDelete
         ) { canvas in
-            Button("Delete Canvas", role: .destructive) { delete(canvas) }
+            Button("Delete Board", role: .destructive) { delete(canvas) }
         } message: { _ in
-            Text("Its Ideas, notes and links are deleted. References stay in the Library.")
+            Text("Everything on it is deleted. Its pictures and prompts stay in the Library.")
         }
     }
 

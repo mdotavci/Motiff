@@ -60,7 +60,7 @@ private struct DetailHeader: View {
             Button {
                 withAnimation(.snappy) { controller.closeDetail() }
             } label: {
-                Label(controller.detailPath.count > 1 ? "Back" : "Canvas", systemImage: "chevron.left")
+                Label(controller.detailPath.count > 1 ? "Back" : "Board", systemImage: "chevron.left")
             }
             .help("Back (\(ShortcutCatalog.closeDetail.keys))")
 

@@ -10,8 +10,8 @@ its own shell (window layout, navigation) and its own capture methods.
 |---|---|---|
 | Project | XcodeGen (`project.yml`) | The spec is plain text, easy to review and regenerate. |
 | Targets | `MotiffMac` (macOS 15+), `Motiff` (iOS 18+), `MotiffShare` (iOS) | These are native targets, not Catalyst. The Mac app gets a real sidebar, windows, menus and keyboard shortcuts. |
-| Mac shell | `NavigationSplitView` (Inbox / Library / Boards sidebar), Settings window on ⌘, | This is the standard Mac layout. |
-| iPhone shell | `TabView` (Inbox / Library / Boards / Settings) and a floating capture button | As in the brief. |
+| Mac shell | `NavigationSplitView` (Inbox / Library / Board Graph, then the Boards), Settings window on ⌘, | This is the standard Mac layout. |
+| iPhone shell | `TabView` (Inbox / Library / Boards / Settings) and a floating capture button. Boards are the freeform boards (Round 3) | As in the brief. |
 | Mac storage | The sandbox container (`~/Library/Containers/com.mdotavci.motiff/…`) | The library moves into an App Group when the Mac Share Extension arrives. That step needs a Team ID. |
 | iOS storage | App Group `group.com.mdotavci.motiff` | Shared with the Share Extension. |
 | Share Extension → app | A drop folder (`Incoming/`) that the app imports from | Keeps the extension small and gives the database a single writer. |
@@ -34,7 +34,7 @@ its own shell (window layout, navigation) and its own capture methods.
 7. Claude: tags on save, "Describe as prompt", API key in the Keychain
 8. Recipe editor: inline parts, live prompt, copy. Edits change the Reference in place (⌘Z undoes); "Save as Remix" is a separate, explicit action.
 9. Search: text search plus filter chips (origin, type, color), and "More like this"
-10. Boards: create, rename, add and remove References. A Reference can be on many Boards.
+10. Boards: create, rename, add and remove References. A Reference can be on many Boards. *(replaced in Round 3: boards are the freeform Canvases)*
 11. Inbox: saves from the last 7 days that haven't been opened
 
 ## Phase 1b — Canvas (idea map)
@@ -81,6 +81,27 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 12. Boards: create, rename, delete; drop or drag References onto them
 13. Colors: pastel palette, color any node, text, line or arrow; arrowheads; selectable lines
 14. Detail page: everything editable, a markdown editor with a formatting bar, add images and notes from it
+
+### Round 3 — direction: an inspiration board and prompt library you take to any AI
+
+Motiff is a place to collect ideas, example images and example prompts on boards, laid out like a
+moodboard and connected like a mind map when you want, and then to take a board to whichever AI
+you work with. This replaces the Phase 1b framing of the Canvas as "a second way to see the
+References" and the image-grid Boards.
+
+| Area | Choice | Why |
+|---|---|---|
+| Boards | One kind of board: the Canvas, called **Board** everywhere in the app (the model keeps the name `Canvas`). The old grid Boards are turned into boards once (`boards.v3`) and their screens are gone; the `Board` model stays in the schema, unused | One place for pictures, prompts and notes; no schema rename |
+| Layout | Freeform first: tools, paste and drop put things where you are, loose; links and sub-ideas are optional. Only Tab / ⌘Return still place on rings around an Idea | A moodboard, with mind-map structure when you want it |
+| Library → board | Right-click › Add to Board ▸, or drag a tile onto a board in the sidebar: a card beside what's there, never twice | The Library stays the prompt and reference library |
+| Taking it to an AI | A copy-and-share pack (markdown + numbered images), no API key, no new dependency. In-app AI chat and MCP are not in this round | Works with any AI today |
+
+15. One Board: Canvas ⇢ Board everywhere, old Boards migrated, Add to Board, freeform placement
+16. Bottom tool bar (Mac and iPhone): select, hand, sticky, note, text, prompt, image, shapes, arrow, idea, Library
+17. Resize and style everything: handles, text size for anything with words, fill, border, line width, dashes, arrowheads; plain pictures
+18. Paste anywhere: at the pointer, onto the selected item, into an open note or prompt; screenshots; iPhone Paste button
+19. Prompts and notes hold more: edit prompts on the board, model and parameters, your own fields, variants, example images
+20. Take a board to an AI: Copy for AI, Export for AI (markdown + images), Share; selection only
 
 ## Phase 2 — iPhone
 

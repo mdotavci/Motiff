@@ -56,7 +56,7 @@ enum CanvasTool: String, CaseIterable, Identifiable, Sendable {
     var help: String {
         switch self {
         case .select: "Select and move (V)"
-        case .hand: "Move around the Canvas (H)"
+        case .hand: "Move around the board (H)"
         case .idea: "Idea: click where it goes (O)"
         case .note: "Note: click where it goes, or double-click anywhere (N)"
         case .text: "Text: click where it goes (T)"
@@ -91,7 +91,7 @@ struct ToolBar: View {
                 title: "Library",
                 systemImage: "square.grid.2x2",
                 isOn: controller.showsLibrary,
-                help: "Library: drag references onto the Canvas (\(ShortcutCatalog.libraryPanel.keys))",
+                help: "Library: drag references onto the board (\(ShortcutCatalog.libraryPanel.keys))",
                 action: controller.toggleLibrary
             )
         }

@@ -81,7 +81,7 @@ struct LibraryDrawer: View {
             }
             .overlay {
                 if shown.isEmpty {
-                    Text(references.isEmpty ? "The Library is empty. Drop images on the Canvas to add some." : "Nothing matches.")
+                    Text(references.isEmpty ? "The Library is empty. Drop images on the board to add some." : "Nothing matches.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

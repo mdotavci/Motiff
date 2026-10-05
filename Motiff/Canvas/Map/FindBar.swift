@@ -11,7 +11,7 @@ struct FindBar: View {
         HStack(spacing: Theme.unit) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Find on this Canvas", text: Binding(
+            TextField("Find on this board", text: Binding(
                 get: { controller.searchText },
                 set: { controller.setSearchText($0) }
             ))

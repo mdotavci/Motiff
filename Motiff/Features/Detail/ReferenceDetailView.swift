@@ -111,7 +111,7 @@ extension EnvironmentValues {
 }
 
 /// The text side of the detail view: Prompt, Notes, Why, Purpose and Source, all editable in
-/// place (⌘Z undoes); then Read, Lineage, Boards and Canvases, which are worked out.
+/// place (⌘Z undoes); then Read, Lineage and Boards, which are worked out.
 struct ReferenceInfo: View {
     let reference: Reference
 
@@ -135,17 +135,10 @@ struct ReferenceInfo: View {
                 DetailSection("Lineage") { LineageCard(reference: reference) }
             }
 
-            if !reference.boards.isEmpty {
+            let boards = Set(reference.canvasNodes.compactMap { $0.canvas?.displayTitle }).sorted()
+            if !boards.isEmpty {
                 DetailSection("Boards") {
-                    Text(reference.boards.map(\.name).sorted().joined(separator: ", "))
-                        .font(.callout)
-                }
-            }
-
-            let canvases = Set(reference.canvasNodes.compactMap { $0.canvas?.displayTitle }).sorted()
-            if !canvases.isEmpty {
-                DetailSection("Canvases") {
-                    Text(canvases.joined(separator: ", "))
+                    Text(boards.joined(separator: ", "))
                         .font(.callout)
                 }
             }

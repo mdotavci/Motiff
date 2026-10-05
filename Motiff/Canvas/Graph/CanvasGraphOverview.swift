@@ -13,7 +13,7 @@ struct CanvasGraphOverview: View {
         let model = Self.model(of: canvases)
         Group {
             if canvases.isEmpty {
-                EmptyState(title: "Canvas Graph", message: "Make a Canvas (⌘N) to see it here.")
+                EmptyState(title: "Board Graph", message: "Make a board (⌘N) to see it here.")
             } else {
                 ForceGraphView(
                     model: model,
@@ -26,13 +26,13 @@ struct CanvasGraphOverview: View {
                 }
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Canvases and the References they share").motiffLabel()
+                        Text("Boards and the References they share").motiffLabel()
                         if model.edges.isEmpty {
-                            Text("No Reference is on more than one Canvas yet.")
+                            Text("No Reference is on more than one board yet.")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("Double-click a Canvas to open it.")
+                            Text("Double-click a board to open it.")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -42,7 +42,7 @@ struct CanvasGraphOverview: View {
                 }
             }
         }
-        .navigationTitle("Canvas Graph")
+        .navigationTitle("Board Graph")
     }
 
     /// Canvases around a circle; each shared Reference starts between the Canvases it's on.

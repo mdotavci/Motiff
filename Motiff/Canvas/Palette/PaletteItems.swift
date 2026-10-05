@@ -35,7 +35,7 @@ enum PaletteItems {
         }
         action(ShortcutCatalog.showShortcuts, "keyboard", run: sources.showShortcuts)
         items.append(PaletteItem(
-            id: "action:canvas-graph", kind: .action, title: "Canvas Graph", subtitle: "Action",
+            id: "action:canvas-graph", kind: .action, title: "Board Graph", subtitle: "Action",
             systemImage: "point.3.filled.connected.trianglepath.dotted", run: sources.showCanvasGraph
         ))
 
@@ -54,8 +54,8 @@ enum PaletteItems {
 
         for canvas in sources.canvases {
             items.append(PaletteItem(
-                id: "canvas:\(canvas.id)", kind: .canvas, title: canvas.displayTitle, subtitle: "Canvas",
-                systemImage: "point.3.connected.trianglepath.dotted"
+                id: "canvas:\(canvas.id)", kind: .canvas, title: canvas.displayTitle, subtitle: "Board",
+                systemImage: "rectangle.3.group"
             ) { sources.openCanvas(canvas) })
         }
 

@@ -5,11 +5,11 @@ import AppKit
 import UIKit
 #endif
 
-/// Context menu for a Reference tile: copy, boards, reveal, delete.
+/// Context menu for a Reference tile: copy, add to a board, reveal, delete.
 struct ReferenceMenu: View {
     @Environment(\.modelContext) private var context
     let reference: Reference
-    let boards: [Board]
+    let boards: [Canvas]
     let onDelete: () -> Void
 
     var body: some View {
@@ -23,13 +23,14 @@ struct ReferenceMenu: View {
         }
         .disabled(!reference.hasMedia)
 
-        Menu("Boards", systemImage: "rectangle.stack") {
+        Menu("Add to Board", systemImage: "rectangle.3.group") {
             ForEach(boards) { board in
-                Toggle(board.displayName, isOn: membership(in: board))
+                Toggle(board.displayTitle, isOn: isOn(board))
             }
             if !boards.isEmpty { Divider() }
             Button("New Board With This") {
-                Board.make(name: "New board", in: context).add([reference])
+                let new = CanvasGraph.makeCanvas(title: "New board", in: context)
+                CanvasGraph.addReferences([reference], to: new.canvas, in: context)
                 try? context.save()
             }
         }
@@ -46,15 +47,18 @@ struct ReferenceMenu: View {
         Button("Delete…", systemImage: "trash", role: .destructive, action: onDelete)
     }
 
-    private func membership(in board: Board) -> Binding<Bool> {
+    /// On: it has a card on that board. Turning it on adds one beside what's there; off takes
+    /// its cards off (it stays in the Library).
+    private func isOn(_ board: Canvas) -> Binding<Bool> {
         Binding {
-            reference.boards.contains { $0.id == board.id }
+            !CanvasGraph.cards(of: reference, on: board).isEmpty
         } set: { isOn in
             if isOn {
-                reference.boards.append(board)
+                CanvasGraph.addReferences([reference], to: board, in: context)
             } else {
-                reference.boards.removeAll { $0.id == board.id }
+                CanvasGraph.delete(CanvasGraph.cards(of: reference, on: board), branch: false, in: context)
             }
+            try? context.save()
         }
     }
 }

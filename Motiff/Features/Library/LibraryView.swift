@@ -29,15 +29,12 @@ struct LibraryView: View {
     }
 }
 
-/// The Library's grid, or one Board's. Drop, paste or import (⌘O) to add: into the Library,
-/// and onto the Board when it's a Board's. Put it in a NavigationStack that opens References.
+/// The Library's grid. Drop, paste or import (⌘O) to add. Put it in a NavigationStack that
+/// opens References.
 struct ReferenceCollectionView: View {
-    /// Show this Board's References instead of the whole Library.
-    var board: Board?
-
     @Environment(\.modelContext) private var context
     @Query(sort: \Reference.createdAt, order: .reverse) private var references: [Reference]
-    @Query(sort: \Board.name) private var boards: [Board]
+    @Query(sort: \Canvas.createdAt) private var boards: [Canvas]
     @AppStorage(LibraryDensity.storageKey) private var densityLevel = LibraryDensity.defaultLevel
 
     @State private var availableWidth: CGFloat = 0
@@ -51,12 +48,11 @@ struct ReferenceCollectionView: View {
     #if os(iOS)
     @State private var showsPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
-    @State private var showsLibraryPicker = false
     #endif
 
     var body: some View {
         content
-            .navigationTitle(board?.displayName ?? "Library")
+            .navigationTitle("Library")
             #if os(macOS)
             .navigationSubtitle(subtitle)
             #endif
@@ -99,19 +95,10 @@ struct ReferenceCollectionView: View {
                 photoItems = []
                 Task { await capture(await CaptureService.items(from: items)) }
             }
-            .sheet(isPresented: $showsLibraryPicker) {
-                LibraryDrawer { reference in
-                    board?.add([reference])
-                    try? context.save()
-                } close: {
-                    showsLibraryPicker = false
-                }
-                .presentationDetents([.medium, .large])
-            }
             #endif
     }
 
-    /// Images and videos from files (and, on iPhone, Photos); on a Board, also from the Library.
+    /// Images and videos from files (and, on iPhone, Photos).
     @ToolbarContentBuilder
     private var addMenu: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -122,9 +109,6 @@ struct ReferenceCollectionView: View {
             Menu("Add", systemImage: "plus") {
                 Button("Photos and Videos…", systemImage: "photo.on.rectangle") { showsPhotos = true }
                 Button("Files…", systemImage: "folder") { isImporting = true }
-                if board != nil {
-                    Button("From the Library…", systemImage: "square.grid.2x2") { showsLibraryPicker = true }
-                }
             }
             #endif
         }
@@ -134,28 +118,18 @@ struct ReferenceCollectionView: View {
         Binding { !justSaved.isEmpty } set: { if !$0 { justSaved = [] } }
     }
 
-    /// Saves what came in as References (on the Board too, on a Board's), then asks why.
-    /// Links have nowhere to go in the Library (they're Canvas cards), so they're skipped.
-    /// References dragged from the Library are already in it: a Board just takes them.
+    /// Saves what came in as References, then asks why. Links have nowhere to go in the Library
+    /// (they're board cards), so they're skipped. References dragged from the Library itself are
+    /// already in it.
     private func capture(_ items: [CaptureItem]) async {
-        var existing: [Reference] = []
-        var rest: [CaptureItem] = []
-        for item in items {
-            if case let .text(text) = item, let id = LibraryDrag.referenceID(in: text) {
-                if let reference = references.first(where: { $0.id == id }) { existing.append(reference) }
-            } else {
-                rest.append(item)
-            }
-        }
-        if let board, !existing.isEmpty {
-            board.add(existing)
-            try? context.save()
+        let rest = items.filter { item in
+            if case let .text(text) = item, LibraryDrag.referenceID(in: text) != nil { return false }
+            return true
         }
         guard !rest.isEmpty else { return }
         let prepared = await CapturePrep.prepare(rest)
         let saved = prepared.compactMap { CaptureService.makeReference($0, in: context) }
         guard !saved.isEmpty else { return }
-        board?.add(saved)
         try? context.save()
         justSaved = saved
     }
@@ -163,9 +137,7 @@ struct ReferenceCollectionView: View {
     @ViewBuilder
     private var content: some View {
         if shown.isEmpty, purposeFilter != nil {
-            EmptyState(title: board?.displayName ?? "Library", message: "No \(purposeFilter?.label.lowercased() ?? "") prompts yet.")
-        } else if shown.isEmpty, board != nil {
-            EmptyState(title: board?.displayName ?? "Board", message: Self.emptyBoardMessage)
+            EmptyState(title: "Library", message: "No \(purposeFilter?.label.lowercased() ?? "") prompts yet.")
         } else if shown.isEmpty {
             EmptyState(title: "Library", message: "Everything you keep.")
         } else {
@@ -180,18 +152,11 @@ struct ReferenceCollectionView: View {
                         ReferenceTile(reference: reference, width: tileWidth)
                     }
                     .buttonStyle(.plain)
-                    // Onto a Board in the sidebar, or onto a Canvas.
+                    // Onto a board in the sidebar, or onto an open board.
                     .draggable(LibraryDrag.payload(for: reference)) {
                         ReferenceTile(reference: reference, width: 120)
                     }
                     .contextMenu {
-                        if let board {
-                            Button("Remove from Board", systemImage: "minus.circle") {
-                                board.remove(reference)
-                                try? context.save()
-                            }
-                            Divider()
-                        }
                         ReferenceMenu(reference: reference, boards: boards) {
                             pendingDelete = reference
                         }
@@ -216,16 +181,9 @@ struct ReferenceCollectionView: View {
     }
 
     private var shown: [Reference] {
-        let all = board?.sortedReferences ?? references
-        guard let purposeFilter else { return all }
-        return all.filter { $0.purpose == purposeFilter }
+        guard let purposeFilter else { return references }
+        return references.filter { $0.purpose == purposeFilter }
     }
-
-    #if os(macOS)
-    private static let emptyBoardMessage = "Drop images here, paste them (⌘V) or add them with +. Or drag references from the Library onto this board in the sidebar."
-    #else
-    private static let emptyBoardMessage = "Tap + to add photos, files, or references from the Library."
-    #endif
 
     private var subtitle: String {
         let count = shown.count == 1 ? "1 reference" : "\(shown.count) references"
@@ -253,14 +211,14 @@ struct ReferenceCollectionView: View {
     private func deleteMessage(for reference: Reference) -> String {
         let remixes = reference.descendants.count
         let lineage = switch remixes {
-        case 0: "The media file is removed too. Boards keep their other references."
+        case 0: "The media file is removed too."
         case 1: "Its remix is deleted too. The media files are removed."
         default: "Its \(remixes) remixes are deleted too. The media files are removed."
         }
         let canvases = switch reference.canvasCountWithRemixes {
         case 0: ""
-        case 1: " It's also taken off the canvas it's on."
-        case let count: " It's also taken off the \(count) canvases it's on."
+        case 1: " It's also taken off the board it's on."
+        case let count: " It's also taken off the \(count) boards it's on."
         }
         return lineage + canvases
     }

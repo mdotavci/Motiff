@@ -76,14 +76,14 @@ jobs:
       - name: Snapshots
         run: |
           .claude/skills/run-motiff/snapshot-ios.sh "$UDID" snapshots \
-            canvases \
-            "canvas:Product photography look" \
-            "canvas:Product photography look|view=map" \
+            boards \
+            "board:Product photography look" \
+            "board:Product photography look|view=outline" \
             "canvas:Product photography look|view=map|select=Light" \
             "canvas:Product photography look|select=Light|detail" \
             "canvas:Product photography look|select=Light|inspector" \
             "canvas:Product photography look|view=graph" \
-            boards
+            "board:Product photography"
 
       # Pushed to ci-snapshots/<branch>-ios, next to the Mac ones.
       - name: Publish snapshots
@@ -201,7 +201,6 @@ jobs:
             "canvas:Product photography look|find=light" \
             "canvas:500 nodes|stress" \
             "canvas:Product photography look|drawer" \
-            boards \
             "board:Product photography" \
             "library|shortcuts"
 

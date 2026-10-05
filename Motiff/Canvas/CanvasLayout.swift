@@ -135,3 +135,46 @@ extension CanvasLayout {
         return point(firstDistance, startAngle)
     }
 }
+
+// MARK: - Placing loose things
+
+extension CanvasLayout {
+    /// `point` if a node of `size` fits there without covering anything, otherwise the nearest
+    /// free spot on rings around it.
+    static func openSpot(for size: CGSize, near point: CGPoint, avoiding occupied: [CGRect], gap: CGFloat = slotGap) -> CGPoint {
+        let room = CGRect(
+            x: point.x - size.width / 2 - gap / 2,
+            y: point.y - size.height / 2 - gap / 2,
+            width: size.width + gap,
+            height: size.height + gap
+        )
+        guard occupied.contains(where: { $0.intersects(room) }) else { return point }
+        return radialSlot(around: point, radius: 0, size: size, avoiding: occupied, startAngle: 0, gap: gap)
+    }
+
+    /// The top-left corner for things added beside what's already on a board: to the right of it,
+    /// level with its top. The origin on an empty board.
+    static func besideContent(_ occupied: [CGRect], gap: CGFloat = 120) -> CGPoint {
+        guard let first = occupied.first else { return .zero }
+        let bounds = occupied.dropFirst().reduce(first) { $0.union($1) }
+        return CGPoint(x: bounds.maxX + gap, y: bounds.minY)
+    }
+
+    /// Centers for `sizes` laid out in rows of `columns`, left to right from `topLeft`, like a
+    /// moodboard: each row as tall as its tallest item, items top-aligned in their row.
+    static func gridCenters(for sizes: [CGSize], columns: Int, topLeft: CGPoint, gap: CGFloat = slotGap) -> [CGPoint] {
+        let columns = max(columns, 1)
+        let cellWidth = (sizes.map(\.width).max() ?? 0) + gap
+        var centers: [CGPoint] = []
+        var top = topLeft.y
+        for rowStart in stride(from: 0, to: sizes.count, by: columns) {
+            let row = sizes[rowStart..<min(rowStart + columns, sizes.count)]
+            for (column, size) in row.enumerated() {
+                let left = topLeft.x + CGFloat(column) * cellWidth
+                centers.append(CGPoint(x: left + size.width / 2, y: top + size.height / 2))
+            }
+            top += (row.map(\.height).max() ?? 0) + gap
+        }
+        return centers
+    }
+}

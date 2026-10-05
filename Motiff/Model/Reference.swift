@@ -60,9 +60,9 @@ final class Reference {
     @Relationship(deleteRule: .nullify) var parent: Reference?
     @Relationship(deleteRule: .cascade, inverse: \Reference.parent) var children: [Reference] = []
 
-    // MARK: Boards
+    // MARK: Old Boards
 
-    /// Inverse declared on `Board.references`. A Reference can live on many Boards.
+    /// Inverse declared on `Board.references`: the first kind of board, now migrated to Canvases.
     var boards: [Board] = []
 
     // MARK: Canvases

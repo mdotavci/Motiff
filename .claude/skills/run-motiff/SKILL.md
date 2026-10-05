@@ -14,7 +14,7 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
 ## Agent path: push, wait, look
 
 1. Pick the screens. Routes are listed in the `Snapshots` step of `build.yml`:
-   `library`, `inbox`, `boards`, `canvas:<title>`. Add one when a screen arrives.
+   `library`, `inbox`, `board:<title>` (`canvas:<title>` works too). Add one when a screen arrives.
 2. Commit and push to your branch.
 3. Wait for the run (prints each job's result and any failed step):
 
@@ -38,7 +38,7 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
 
 `Motiff/App/DebugLaunchRoute.swift` reads them from UserDefaults' argument domain:
 
-- `-MotiffOpen library|inbox|boards|canvasgraph|canvas:<title>` selects that sidebar item.
+- `-MotiffOpen library|inbox|canvasgraph|board:<title>` selects that sidebar item (`canvas:<title>` is the same as `board:`).
 - `-MotiffSnapshot <name>` writes `Snapshots/<name>.png` into the library folder
   (`~/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/Motiff/`).
   If a sheet is open, the sheet is what's drawn.
@@ -56,8 +56,8 @@ In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:
 collects the PNGs. CI calls it after the build.
 
 iPhone: `snapshot-ios.sh <simulator udid> <out-dir> <route>...` relaunches the installed app per
-route and screenshots the simulator (extra route `canvases`; a Canvas opens in the Outline, so add
-`view=map` for the Map). CI pushes them to `ci-snapshots/<branch>-ios`.
+route and screenshots the simulator (extra route `boards`, the Boards tab; a board opens on the
+Map, add `view=outline` for the Outline). CI pushes them to `ci-snapshots/<branch>-ios`.
 
 ## Human path: on a Mac
 

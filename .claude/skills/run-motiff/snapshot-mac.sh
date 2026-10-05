@@ -2,7 +2,7 @@
 # Opens the Mac app once per route and saves a PNG of its window for each.
 #
 #   snapshot-mac.sh <path/to/Motiff.app> <out-dir> <route>...
-#   route: library | inbox | boards | canvas:<title>, then optional |-separated extras:
+#   route: library | inbox | canvasgraph | board:<title> (or canvas:<title>), then optional |-separated extras:
 #          select=<node title, or its start>  inspector  detail  paste=<text>  filter=<category>  view=outline|graph  find=<text>  stress  shortcuts  drawer
 #   e.g.   "canvas:Product photography look|select=Light|inspector"
 #

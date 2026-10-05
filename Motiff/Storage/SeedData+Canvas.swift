@@ -9,6 +9,25 @@ extension SeedData {
     /// Set once Canvases made with the first palette have moved to the pastel one.
     static let pastelPaletteKey = "palette.v2"
 
+    /// Set once the old Boards (image grids) have been turned into boards.
+    static let boardsMergedKey = "boards.v3"
+
+    /// Turns each old Board into a board with the same name and its References as cards, once.
+    @MainActor
+    static func migrateBoardsIfNeeded(context: ModelContext) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: boardsMergedKey) else { return }
+        let boards = (try? context.fetch(FetchDescriptor<Board>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+        // Not something to undo.
+        context.undoManager?.disableUndoRegistration()
+        for board in boards {
+            CanvasGraph.makeCanvas(from: board, in: context)
+        }
+        context.undoManager?.enableUndoRegistration()
+        try? context.save()
+        defaults.set(true, forKey: boardsMergedKey)
+    }
+
     /// Recolors categories that still use the first palette's colors, once.
     @MainActor
     static func migratePaletteIfNeeded(context: ModelContext) {

@@ -66,8 +66,7 @@ struct ShortcutSection: Identifiable {
 enum ShortcutCatalog {
     // MARK: App
 
-    static let newCanvas = Shortcut("New Canvas", "n", .command)
-    static let newBoard = Shortcut("New Board", "n", [.command, .shift])
+    static let newCanvas = Shortcut("New Board", "n", .command)
     static let showShortcuts = Shortcut("Keyboard Shortcuts", "/", .command)
     static let goTo = Shortcut("Go To…", "k", .command)
     static let undo = Shortcut("Undo", "z", .command)
@@ -86,7 +85,7 @@ enum ShortcutCatalog {
     static let smallerThumbnails = Shortcut("Smaller Thumbnails", "-", .command)
     static let defaultThumbnails = Shortcut("Default Thumbnail Size", "0", .command)
 
-    // MARK: Canvas: looking around
+    // MARK: Board: looking around
 
     static let zoomIn = Shortcut("Zoom In", "+", .command)
     static let zoomOut = Shortcut("Zoom Out", "-", .command)
@@ -94,7 +93,7 @@ enum ShortcutCatalog {
     static let pan = Shortcut("Pan", pointer: "Scroll, or drag the background")
     static let zoomAtPointer = Shortcut("Zoom at the pointer", pointer: "Pinch, or ⌘-scroll")
 
-    // MARK: Canvas: editing
+    // MARK: Board: editing
 
     static let addNote = Shortcut("Add Note", .tab)
     static let addSubIdea = Shortcut("Add Sub-Idea", .return, .command)
@@ -113,7 +112,7 @@ enum ShortcutCatalog {
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
     static let nodeMenu = Shortcut("Everything You Can Do to a Node", pointer: "Right-click it (long-press on iPhone)")
 
-    // MARK: Canvas: finding
+    // MARK: Board: finding
 
     static let find = Shortcut("Find…", "f", .command)
     static let findNext = Shortcut("Find Next", "g", .command)
@@ -122,7 +121,7 @@ enum ShortcutCatalog {
     static let minimap = Shortcut("Show or Hide the Minimap", "m", [.command, .option])
     static let minimapMove = Shortcut("Look Somewhere Else", pointer: "Click or drag in the minimap")
 
-    // MARK: Canvas: views
+    // MARK: Board: views
 
     static let mapView = Shortcut("Map", "1", .command)
     static let outlineView = Shortcut("Outline", "2", .command)
@@ -145,7 +144,7 @@ enum ShortcutCatalog {
     static let graphShowOnMap = Shortcut("Graph: Show on the Map", .return)
     static let graphOpen = Shortcut("Graph: Open Full Size", pointer: "Double-click a dot")
 
-    // MARK: Canvas: categories
+    // MARK: Board: categories
 
     static let assignCategory = Shortcut("Give the Selection a Category", pointer: "1 to 9, in legend order")
     static let noCategory = Shortcut("No Category", "0")
@@ -153,11 +152,11 @@ enum ShortcutCatalog {
     static let filterMore = Shortcut("Show More Than One", pointer: "⇧-click in the legend")
     static let clearFilter = Shortcut("Show Everything Again", .escape)
 
-    // MARK: Canvas: full size
+    // MARK: Board: full size
 
     static let openDetail = Shortcut("Open Full Size", .space)
     static let openByDoubleClick = Shortcut("Open a Reference or Prompt", pointer: "Double-click it")
-    static let closeDetail = Shortcut("Back to the Canvas", .escape)
+    static let closeDetail = Shortcut("Back to the Board", .escape)
     static let previousSibling = Shortcut("Previous at the Same Level", .leftArrow)
     static let nextSibling = Shortcut("Next at the Same Level", .rightArrow)
     static let copyPrompt = Shortcut("Copy Prompt", "c", [.command, .shift])
@@ -169,11 +168,10 @@ enum ShortcutCatalog {
 
     // MARK: Boards
 
-    static let addToBoard = Shortcut("Put a Reference on a Board", pointer: "Drag it onto the Board in the sidebar")
-    static let addToBoardFromMenu = Shortcut("Put It on a Board, or a New One", pointer: "Right-click › Boards")
-    static let removeFromBoard = Shortcut("Take It off the Board", pointer: "Right-click › Remove from Board")
+    static let addToBoard = Shortcut("Put a Library Reference on a Board", pointer: "Drag it onto the board in the sidebar")
+    static let addToBoardFromMenu = Shortcut("Put It on a Board, or a New One", pointer: "Right-click it in the Library › Add to Board")
 
-    // MARK: Canvas: tools
+    // MARK: Board: tools
 
     static let selectTool = Shortcut("Select Tool", "v")
     static let handTool = Shortcut("Hand Tool: Drag to Move Around", "h")
@@ -183,7 +181,7 @@ enum ShortcutCatalog {
     static let imageTool = Shortcut("Image Tool: Click Where Images Go", "i")
     static let noteByDoubleClick = Shortcut("New Note Right There", pointer: "Double-click empty space")
     static let libraryPanel = Shortcut("Show Library Panel", "l", [.command, .option])
-    static let dragFromLibrary = Shortcut("Put a Reference on the Canvas", pointer: "Drag it from the Library panel")
+    static let dragFromLibrary = Shortcut("Put a Reference on the Board", pointer: "Drag it from the Library panel")
     static let addFromLibrary = Shortcut("Put It on the Selected Idea", pointer: "Click it in the Library panel")
 
     static func tool(_ tool: CanvasTool) -> Shortcut {
@@ -198,7 +196,7 @@ enum ShortcutCatalog {
         }
     }
 
-    // MARK: Canvas: connecting
+    // MARK: Board: connecting
 
     static let connect = Shortcut("Put a Node Under Another", pointer: "Drag its handle onto it")
     static let connectLink = Shortcut("Link Two Nodes", pointer: "⌥-drag the handle")
@@ -208,42 +206,42 @@ enum ShortcutCatalog {
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
     static let selectLine = Shortcut("Select a Line", pointer: "Click it")
 
-    // MARK: Canvas: colors
+    // MARK: Board: colors
 
     static let color = Shortcut("Color of the Selection or Line", "c")
     static let arrow = Shortcut("Arrowhead On or Off (a selected line)", "a")
     static let deleteLine = Shortcut("Delete the Selected Line", .delete)
 
     static let sections: [ShortcutSection] = [
-        ShortcutSection(title: "Motiff", items: [newCanvas, goTo, undo, redo, showShortcuts]),
+        ShortcutSection(title: "Motiff", items: [goTo, undo, redo, showShortcuts]),
         ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
-        ShortcutSection(title: "Boards", items: [newBoard, addToBoard, removeFromBoard, addToBoardFromMenu]),
-        ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
-        ShortcutSection(title: "Canvas tools", items: [
+        ShortcutSection(title: "Boards", items: [newCanvas, addToBoard, addToBoardFromMenu]),
+        ShortcutSection(title: "Board", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
+        ShortcutSection(title: "Board tools", items: [
             selectTool, handTool, ideaTool, noteTool, textTool, imageTool, noteByDoubleClick,
             libraryPanel, dragFromLibrary, addFromLibrary,
         ]),
-        ShortcutSection(title: "Canvas editing", items: [
+        ShortcutSection(title: "Board editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector, nodeMenu,
         ]),
-        ShortcutSection(title: "Canvas finding", items: [find, findNext, findPrevious, closeFind, minimap, minimapMove]),
-        ShortcutSection(title: "Canvas views", items: [
+        ShortcutSection(title: "Board finding", items: [find, findNext, findPrevious, closeFind, minimap, minimapMove]),
+        ShortcutSection(title: "Board views", items: [
             mapView, outlineView, graphView, outlineStep, outlineFold, outlineIndent, outlineOutdent,
             outlineMoveUp, outlineMoveDown, graphShowOnMap, graphOpen,
         ]),
-        ShortcutSection(title: "Canvas categories", items: [
+        ShortcutSection(title: "Board categories", items: [
             assignCategory, noCategory, filterCategory, filterMore, clearFilter,
         ]),
-        ShortcutSection(title: "Canvas full size", items: [
+        ShortcutSection(title: "Board full size", items: [
             openDetail, openByDoubleClick, closeDetail, previousSibling, nextSibling, copyPrompt,
             editTitle, bold, italic, insertLink, detailAdd,
         ]),
-        ShortcutSection(title: "Canvas connections", items: [
+        ShortcutSection(title: "Board connections", items: [
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,
         ]),
-        ShortcutSection(title: "Canvas colors and lines", items: [color, selectLine, arrow, deleteLine]),
+        ShortcutSection(title: "Board colors and lines", items: [color, selectLine, arrow, deleteLine]),
     ]
 }
 

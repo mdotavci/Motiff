@@ -7,18 +7,18 @@ import AppKit
 /// Launch arguments that let CI (and agents) open a screen and snapshot it without clicking.
 /// They land in UserDefaults' argument domain, so there's nothing to parse:
 ///
-///     -MotiffOpen library | inbox | boards | board:<name> | canvasgraph | canvas:<title>
+///     -MotiffOpen library | inbox | canvasgraph | board:<title> (canvas:<title> works too)
 ///     -MotiffSnapshot <name>     writes Snapshots/<name>.png in the library folder (Mac)
-///     -MotiffSelect <title>      on a Canvas, selects the node with that title
-///     -MotiffInspector YES       on a Canvas, opens the inspector
-///     -MotiffDetail YES          on a Canvas, opens the selected node full size
-///     -MotiffPaste <text>        on a Canvas, pastes the text onto the selected Idea
-///     -MotiffFilter <category>   on a Canvas, filters the legend to that category
-///     -MotiffView outline|graph  on a Canvas, opens that view
-///     -MotiffFind <text>         on a Canvas, opens the find bar with that text
-///     -MotiffStress YES          makes the 500-node Canvas first
+///     -MotiffSelect <title>      on a board, selects the node with that title
+///     -MotiffInspector YES       on a board, opens the inspector
+///     -MotiffDetail YES          on a board, opens the selected node full size
+///     -MotiffPaste <text>        on a board, pastes the text onto the selected Idea
+///     -MotiffFilter <category>   on a board, filters the legend to that category
+///     -MotiffView outline|graph  on a board, opens that view
+///     -MotiffFind <text>         on a board, opens the find bar with that text
+///     -MotiffStress YES          makes the 500-node board first
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
-///     -MotiffDrawer YES          on a Canvas, opens the Library panel
+///     -MotiffDrawer YES          on a board, opens the Library panel
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
 enum DebugLaunchRoute {
@@ -78,27 +78,28 @@ enum DebugLaunchRoute {
     }
 
     #if os(macOS)
-    static func selection(for route: String, canvases: [Canvas], boards: [Board] = []) -> SidebarSelection {
+    static func selection(for route: String, canvases: [Canvas]) -> SidebarSelection {
         switch route {
         case "inbox": return .inbox
-        case "boards": return .boards
         case "canvasgraph": return .canvasGraph
-        case let route where route.hasPrefix("board:"):
-            let name = String(route.dropFirst("board:".count))
-            if let board = boards.first(where: { $0.name == name }) {
-                return .board(board.id)
-            }
-            return .boards
-        case let route where route.hasPrefix("canvas:"):
-            let title = String(route.dropFirst("canvas:".count))
-            if let canvas = canvases.first(where: { $0.title == title }) {
+        default:
+            if let title = boardTitle(in: route), let canvas = canvases.first(where: { $0.title == title }) {
                 return .canvas(canvas.id)
             }
             return .library
-        default: return .library
         }
     }
+    #endif
 
+    /// The title in a `board:<title>` or `canvas:<title>` route.
+    static func boardTitle(in route: String) -> String? {
+        for prefix in ["board:", "canvas:"] where route.hasPrefix(prefix) {
+            return String(route.dropFirst(prefix.count))
+        }
+        return nil
+    }
+
+    #if os(macOS)
     /// Draws the frontmost window, title bar and toolbar included, into a PNG; or the sheet
     /// in front of it, if one is open. Uses the view hierarchy, so it needs no
     /// screen-recording permission.

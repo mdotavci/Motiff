@@ -58,6 +58,56 @@ enum CanvasGraph {
         canvas?.updatedAt = .now
     }
 
+    /// Puts References on a board as cards, loose, in a grid that starts at `topLeft` (or beside
+    /// what's already there). One that's already on the board isn't added again.
+    @discardableResult
+    static func addReferences(
+        _ references: [Reference],
+        to canvas: Canvas,
+        topLeft: CGPoint? = nil,
+        columns: Int = 4,
+        in context: ModelContext
+    ) -> [CanvasNode] {
+        let existing = canvas.nodes.filter { !$0.isDeleted }
+        var onBoard = Set(existing.compactMap { $0.reference?.id })
+        var occupied = existing.map(rect(of:))
+        let start = topLeft ?? CanvasLayout.besideContent(occupied)
+        var made: [CanvasNode] = []
+        for reference in references where !onBoard.contains(reference.id) {
+            onBoard.insert(reference.id)
+            made.append(addNode(reference.hasMedia ? .reference : .prompt, to: canvas, at: start, reference: reference, in: context))
+        }
+        let centers = CanvasLayout.gridCenters(for: made.map(CanvasLayout.size(of:)), columns: columns, topLeft: start)
+        for (node, center) in zip(made, centers) {
+            node.position = CanvasLayout.openSpot(for: CanvasLayout.size(of: node), near: center, avoiding: occupied)
+            occupied.append(rect(of: node))
+        }
+        return made
+    }
+
+    /// The cards that show `reference` on `canvas`.
+    static func cards(of reference: Reference, on canvas: Canvas) -> [CanvasNode] {
+        reference.canvasNodes.filter { $0.canvas === canvas && !$0.isDeleted }
+    }
+
+    /// A board made from one of the old Boards (image grids): the same name, its References as
+    /// cards in a grid under the root Idea, newest first.
+    @discardableResult
+    static func makeCanvas(from board: Board, in context: ModelContext) -> Canvas {
+        let new = makeCanvas(title: board.name, rootTitle: board.displayName, in: context)
+        let columns = 4
+        let width = CGFloat(columns) * (CanvasLayout.referenceWidth + CanvasLayout.slotGap)
+        let rootBottom = CanvasLayout.ideaDiameters[0] / 2
+        addReferences(
+            board.sortedReferences,
+            to: new.canvas,
+            topLeft: CGPoint(x: -width / 2, y: rootBottom + 80),
+            columns: columns,
+            in: context
+        )
+        return new.canvas
+    }
+
     // MARK: Nodes
 
     /// Adds a node. With a parent it belongs to that node and takes its category unless one is given.

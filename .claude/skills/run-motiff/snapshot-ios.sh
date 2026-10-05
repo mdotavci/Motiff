@@ -2,12 +2,12 @@
 # Launches the iOS app in a booted simulator once per route and screenshots each.
 #
 #   snapshot-ios.sh <simulator udid> <out-dir> <route>...
-#   route: library | inbox | boards | canvases | canvas:<title>, then optional |-separated extras:
+#   route: library | inbox | boards | board:<title> (or canvas:<title>), then optional |-separated extras:
 #          select=<node title, or its start>  inspector  detail  filter=<category>  view=map|outline|graph  find=<text>
 #   e.g.   "canvas:Product photography look|view=map"
 #
 # The app must already be installed (xcrun simctl install). Debug builds only: the launch
-# arguments are compiled out of Release. On iPhone a Canvas opens in the Outline.
+# arguments are compiled out of Release.
 set -euo pipefail
 
 UDID="$1"

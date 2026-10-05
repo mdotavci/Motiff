@@ -23,7 +23,7 @@ struct CanvasInspector: View {
                         }
                     }
                 } else {
-                    Text("Select something on the Canvas to see its details here.")
+                    Text("Select something on the board to see its details here.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

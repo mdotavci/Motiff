@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Canvas actions the menu bar can reach in the focused window.
+/// Board actions the menu bar can reach in the focused window.
 struct CanvasActions {
     var newCanvas: @MainActor () -> Void
-    var newBoard: @MainActor () -> Void
 }
 
 /// Zoom for the Canvas in the focused window. While it's set, View › Zoom In / Zoom Out /
@@ -58,8 +57,8 @@ extension FocusedValues {
 }
 
 #if os(macOS)
-/// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app), Import…,
-/// the Canvas menu, and Help › Keyboard Shortcuts (⌘/).
+/// File › New Board (⌘N), which replaces New Window (Motiff is a single-window app), Import…,
+/// the Board menu, and Help › Keyboard Shortcuts (⌘/).
 ///
 /// Tab, Return, Space, the tool letters (V H O N T I L), ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
 /// take those keys away from every text field. Their menu items show no key; the help sheet
@@ -80,9 +79,6 @@ struct CanvasCommands: Commands {
             Button(ShortcutCatalog.newCanvas.title) { actions?.newCanvas() }
                 .shortcut(ShortcutCatalog.newCanvas)
                 .disabled(actions == nil)
-            Button(ShortcutCatalog.newBoard.title) { actions?.newBoard() }
-                .shortcut(ShortcutCatalog.newBoard)
-                .disabled(actions == nil)
             Button(ShortcutCatalog.importFiles.title) { importFiles?.run() }
                 .shortcut(ShortcutCatalog.importFiles)
                 .disabled(importFiles == nil)
@@ -92,7 +88,7 @@ struct CanvasCommands: Commands {
                 .disabled(palette == nil)
         }
 
-        CommandMenu("Canvas") {
+        CommandMenu("Board") {
             ForEach(CanvasViewMode.allCases) { mode in
                 Toggle(mode.label, isOn: Binding(
                     get: { editing?.viewMode == mode },
@@ -165,7 +161,7 @@ struct CanvasCommands: Commands {
 
         #if DEBUG
         CommandMenu("Debug") {
-            Button("Generate 500-Node Canvas") { debug?.makeStressCanvas() }
+            Button("Generate 500-Node Board") { debug?.makeStressCanvas() }
                 .disabled(debug == nil)
             Toggle("Show Frame Rate", isOn: $showsFrameRate)
         }
