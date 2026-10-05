@@ -96,10 +96,10 @@ References" and the image-grid Boards.
 | Library → board | Right-click › Add to Board ▸, or drag a tile onto a board in the sidebar: a card beside what's there, never twice | The Library stays the prompt and reference library |
 | Taking it to an AI | A copy-and-share pack (markdown + numbered images), no API key, no new dependency. In-app AI chat and MCP are not in this round | Works with any AI today |
 
-15. One Board: Canvas ⇢ Board everywhere, old Boards migrated, Add to Board, freeform placement
-16. Bottom tool bar (Mac and iPhone): select, hand, sticky, note, text, prompt, image, shapes, arrow, idea, Library
-17. Resize and style everything: handles, text size for anything with words, fill, border, line width, dashes, arrowheads; plain pictures
-18. Paste anywhere: at the pointer, onto the selected item, into an open note or prompt; screenshots; iPhone Paste button
+15. One Board: Canvas ⇢ Board everywhere, old Boards migrated, Add to Board, freeform placement *(done)*
+16. Bottom tool bar (Mac and iPhone): select, hand, sticky, note, text, prompt, image, shapes, arrow, idea, Library *(done)*
+17. Resize and style everything: handles, text size for anything with words, fill, border, line width, dashes, arrowheads; plain pictures *(done)*
+18. Paste anywhere: at the pointer, onto the selected item, into an open note or prompt; screenshots; iPhone Paste button *(done)*
 19. Prompts and notes hold more: edit prompts on the board, model and parameters, your own fields, variants, example images
 20. Take a board to an AI: Copy for AI, Export for AI (markdown + images), Share; selection only
 

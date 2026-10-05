@@ -193,6 +193,14 @@ enum CanvasGraph {
         return node
     }
 
+    /// A prompt card's text, written on the board: its Reference's prompt, so the Library and
+    /// every board it's on show the change.
+    static func setPrompt(_ text: String, of node: CanvasNode) {
+        guard let reference = node.reference, text != (reference.copyablePrompt ?? "") else { return }
+        reference.promptRaw = text
+        for card in reference.canvasNodes { touch(card.canvas) }
+    }
+
     /// A node made to fill `rect`. Ideas stay circles; Text scales its letters instead of
     /// getting a fixed box, so it still grows as it's typed into.
     static func resize(_ node: CanvasNode, to rect: CGRect) {

@@ -216,6 +216,19 @@ enum ShortcutCatalog {
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
     static let selectLine = Shortcut("Select a Line", pointer: "Click it")
 
+    // MARK: Taking a board to an AI
+
+    static let copyForAI = Shortcut("Copy for AI", "c", [.command, .option])
+    static let exportForAI = Shortcut("Export for AI…", "e", [.command, .option])
+    static let selectionForAI = Shortcut("Just Part of a Board", pointer: "Select it first, then Copy or Export for AI")
+
+    // MARK: Prompts
+
+    static let writePrompt = Shortcut("Write a Prompt Right on the Board", pointer: "Double-click it, or select it and press Return")
+    static let promptDetails = Shortcut("Model, Settings and Your Own Fields", pointer: "Open it (Space) › Details")
+    static let promptVersions = Shortcut("Keep Other Versions of a Prompt", pointer: "Open it (Space) › Versions › Add a Version")
+    static let copyWithSettings = Shortcut("Copy a Prompt With Its Model's Parameters", "c", [.command, .shift])
+
     // MARK: Board: size and style
 
     static let resize = Shortcut("Resize the Selection", pointer: "Drag a corner")
@@ -262,6 +275,8 @@ enum ShortcutCatalog {
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,
         ]),
         ShortcutSection(title: "Board colors and lines", items: [color, selectLine, arrow, deleteLine]),
+        ShortcutSection(title: "Prompts", items: [writePrompt, promptDetails, promptVersions, copyWithSettings]),
+        ShortcutSection(title: "Taking a board to an AI", items: [copyForAI, exportForAI, selectionForAI]),
         ShortcutSection(title: "Board size and style", items: [
             resize, stretchPicture, moveArrowEnd, biggerText, smallerText, lineStyle, pictureOrCard,
         ]),

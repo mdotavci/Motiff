@@ -24,6 +24,8 @@ struct CanvasMapView: View {
     @State private var labelingEdge: CanvasSnapshot.Edge?
     @State private var labelDraft = ""
     @State private var isImporting = false
+    /// Export for AI: the folder being saved.
+    @State private var exportingPack: AIPackFolder?
     /// Where the Image tool was clicked, for the files the picker brings back; nil for ⌘O.
     @State private var importPoint: CGPoint?
     #if os(macOS)
@@ -63,9 +65,17 @@ struct CanvasMapView: View {
             #endif
     }
 
-    /// File, photo and Library pickers.
+    /// File, photo and Library pickers, and Export for AI's save panel.
     private func pickers(_ content: some View) -> some View {
         content
+            .fileExporter(
+                isPresented: Binding(get: { exportingPack != nil }, set: { if !$0 { exportingPack = nil } }),
+                document: exportingPack,
+                contentType: .folder,
+                defaultFilename: AIPack.safeName(canvas.displayTitle) + " for AI"
+            ) { _ in
+                exportingPack = nil
+            }
             .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
                 let point = importPoint
                 importPoint = nil
@@ -261,7 +271,9 @@ struct CanvasMapView: View {
                 toggleLibrary: controller.toggleLibrary,
                 hasWords: controller.selectionFontSize != nil,
                 biggerText: { controller.stepFontSize(by: 1) },
-                smallerText: { controller.stepFontSize(by: -1) }
+                smallerText: { controller.stepFontSize(by: -1) },
+                copyForAI: controller.copyForAI,
+                exportForAI: exportForAI
             ))
             #endif
             .navigationTitle(canvas.displayTitle)
@@ -270,12 +282,34 @@ struct CanvasMapView: View {
             #endif
     }
 
+    /// ⌥⌘E: the pack's text and pictures as a folder.
+    private func exportForAI() {
+        exportingPack = AIPackFolder(pack: controller.aiPack()) { MediaStore.url(for: $0) }
+    }
+
+    /// Copy or export the board (or the selection) to take it to an AI.
+    private var aiMenu: some View {
+        Menu("Take to AI", systemImage: "square.and.arrow.up") {
+            Button(controller.selection.isEmpty ? "Copy for AI" : "Copy Selection for AI", systemImage: "doc.on.doc", action: controller.copyForAI)
+            Button("Export for AI…", systemImage: "folder", action: exportForAI)
+            #if os(iOS)
+            ShareLink(item: controller.currentAIPack.markdown, subject: Text(canvas.displayTitle)) {
+                Label("Share as Text…", systemImage: "square.and.arrow.up")
+            }
+            #endif
+        }
+        .help("Copy or export this board, or what's selected, to paste into any AI (\(ShortcutCatalog.copyForAI.keys))")
+    }
+
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         #if os(macOS)
         ToolbarItem(placement: .primaryAction) {
             viewPicker
                 .help("Map, Outline or Graph (⌘1, ⌘2, ⌘3)")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            aiMenu
         }
         ToolbarItem(placement: .primaryAction) {
             Button("Inspector", systemImage: "sidebar.right", action: controller.toggleInspector)
@@ -287,7 +321,8 @@ struct CanvasMapView: View {
                 .labelStyle(.iconOnly)
                 .frame(width: 150)
         }
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItemGroup(placement: .primaryAction) {
+            aiMenu
             Button("Inspector", systemImage: "info.circle", action: controller.toggleInspector)
         }
         #endif

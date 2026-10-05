@@ -17,9 +17,9 @@ struct ReferenceDetailView: View {
             #endif
             .toolbar {
                 ToolbarItemGroup {
-                    if let prompt = reference.copyablePrompt {
+                    if let prompt = reference.promptToCopy {
                         Button("Copy Prompt", systemImage: "text.quote") { Pasteboard.copy(prompt) }
-                            .help("Copy the prompt")
+                            .help("Copy the prompt, with its model's parameters")
                     }
                     if reference.hasMedia {
                         #if os(macOS)
@@ -120,6 +120,12 @@ struct ReferenceInfo: View {
             header
 
             DetailSection(reference.recipe.isEmpty ? "Prompt" : "Recipe") { RecipeCard(reference: reference) }
+
+            DetailSection("Details") { PromptDetails(reference: reference) }
+
+            DetailSection(reference.promptVariants.isEmpty ? "Versions" : "Versions · \(reference.promptVariants.count)") {
+                PromptVariants(reference: reference)
+            }
 
             DetailSection("Notes") { notes }
 
@@ -258,13 +264,6 @@ private struct RecipeCard: View {
                 KeyValueRow(key: part.kind.label, value: part.text)
             }
             PromptEditor(reference: reference)
-            if let model = reference.model, !model.isEmpty {
-                KeyValueRow(key: "Model", value: model)
-            }
-            let settings = reference.settings
-            ForEach(settings.keys.sorted(), id: \.self) { key in
-                KeyValueRow(key: key, value: settings[key] ?? "")
-            }
             if reference.recipeIsDescribed {
                 Text("Described from the image by AI, not the original prompt.")
                     .font(.caption)
@@ -408,7 +407,7 @@ private struct PromptEditor: View {
             HStack {
                 Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
                     save()
-                    Pasteboard.copy(draft)
+                    Pasteboard.copy(reference.promptToCopy ?? draft)
                     copied = true
                     Task {
                         try? await Task.sleep(for: .seconds(1.5))
@@ -520,5 +519,143 @@ extension Color {
             green: Double((value >> 8) & 0xFF) / 255,
             blue: Double(value & 0xFF) / 255
         )
+    }
+}
+
+/// The prompt's model and settings, all editable: the usual ones (negative prompt, aspect
+/// ratio, seed, parameters), then fields of your own. Copy Prompt adds them in the model's
+/// own syntax (`PromptSettings.formatted`).
+private struct PromptDetails: View {
+    let reference: Reference
+
+    var body: some View {
+        let settings = reference.promptSettings
+        VStack(alignment: .leading, spacing: Theme.unit) {
+            HStack(spacing: Theme.unit) {
+                label("Model")
+                CommitField(prompt: "Which model or tool", value: reference.model ?? "") { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    reference.edit { $0.model = trimmed.isEmpty ? nil : trimmed }
+                }
+                Menu {
+                    ForEach(PromptSettings.suggestedModels, id: \.self) { name in
+                        Button(name) { reference.edit { $0.model = name } }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Pick a model")
+            }
+            ForEach(PromptSettings.Known.allCases, id: \.self) { key in
+                HStack(spacing: Theme.unit) {
+                    label(key.rawValue)
+                    CommitField(prompt: key.placeholder, value: settings.known[key] ?? "") { text in
+                        update { $0.known[key] = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    }
+                }
+            }
+            ForEach(Array(settings.custom.enumerated()), id: \.offset) { index, field in
+                HStack(spacing: Theme.unit) {
+                    CommitField(prompt: "Name", value: field.key) { text in
+                        let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        update { settings in
+                            guard index < settings.custom.count, !name.isEmpty,
+                                  !settings.custom.contains(where: { $0.key == name }) else { return }
+                            settings.custom[index].key = name
+                        }
+                    }
+                    .frame(width: 110)
+                    CommitField(prompt: "Value", value: field.value) { text in
+                        update { settings in
+                            guard index < settings.custom.count else { return }
+                            settings.custom[index].value = text
+                        }
+                    }
+                    Button("Remove", systemImage: "minus.circle") {
+                        update { settings in
+                            guard index < settings.custom.count else { return }
+                            settings.custom.remove(at: index)
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            Button("Add a Field", systemImage: "plus") {
+                update { $0.custom.append(PromptSettings.Field(key: $0.newFieldName(), value: "")) }
+            }
+            .buttonStyle(.borderless)
+            .font(.callout)
+        }
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(width: 110, alignment: .leading)
+    }
+
+    private func update(_ change: (inout PromptSettings) -> Void) {
+        var settings = reference.promptSettings
+        change(&settings)
+        reference.edit { $0.promptSettings = settings }
+    }
+}
+
+/// Other versions of the prompt: edit one, copy it, make it the main prompt, or remove it.
+private struct PromptVariants: View {
+    let reference: Reference
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.unit) {
+            ForEach(Array(reference.promptVariants.enumerated()), id: \.offset) { index, variant in
+                HStack(alignment: .top, spacing: Theme.unit) {
+                    CommitField(prompt: "Another version", value: variant, axis: .vertical) { text in
+                        reference.edit { reference in
+                            guard index < reference.promptVariants.count else { return }
+                            reference.promptVariants[index] = text
+                        }
+                    }
+                    .font(.callout.monospaced())
+                    Menu {
+                        Button("Copy", systemImage: "doc.on.doc") {
+                            Pasteboard.copy(reference.promptSettings.formatted(variant, model: reference.model))
+                        }
+                        Button("Make It the Main Prompt", systemImage: "arrow.up.circle") { makeMain(index) }
+                        Divider()
+                        Button("Remove", systemImage: "trash", role: .destructive) {
+                            reference.edit { reference in
+                                guard index < reference.promptVariants.count else { return }
+                                reference.promptVariants.remove(at: index)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                }
+            }
+            Button("Add a Version", systemImage: "plus") {
+                reference.edit { $0.promptVariants.append($0.copyablePrompt ?? "") }
+            }
+            .buttonStyle(.borderless)
+            .font(.callout)
+            .help("A copy of the prompt to change and try")
+        }
+    }
+
+    /// Swaps a version with the main prompt, so nothing is lost.
+    private func makeMain(_ index: Int) {
+        reference.edit { reference in
+            guard index < reference.promptVariants.count else { return }
+            let main = reference.copyablePrompt ?? ""
+            reference.promptRaw = reference.promptVariants[index]
+            reference.promptVariants[index] = main
+        }
     }
 }

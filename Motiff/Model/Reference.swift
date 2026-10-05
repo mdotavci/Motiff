@@ -35,6 +35,9 @@ final class Reference {
 
     var model: String?
     var settingsData: Data?
+    /// Other versions of the prompt for the same idea, to try or to keep. The main one is
+    /// `promptRaw`.
+    var promptVariants: [String] = []
 
     // MARK: Why
 

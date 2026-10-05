@@ -629,7 +629,7 @@ final class CanvasController {
     }
 
     /// The Prompt tool: a new prompt (a Reference in the Library, with no picture yet) where the
-    /// board was clicked, opened full size to write it.
+    /// board was clicked, typed into right there.
     func placePrompt(at viewPoint: CGPoint) {
         endEditing()
         guard let context else { return }
@@ -640,10 +640,7 @@ final class CanvasController {
         reference.aiState = .done
         let node = CanvasGraph.addNode(.prompt, to: canvas, at: point, reference: reference, in: context)
         if tool != .select { setTool(.select) }
-        save()
-        reload()
-        selection = [node.id]
-        openDetail(node.id)
+        finishAdding(node)
     }
 
     // MARK: Free arrows
@@ -688,8 +685,8 @@ final class CanvasController {
 
     // MARK: Editing in place
 
-    /// Return or double-click: type into an Idea's title, a Note's text or a Link's title.
-    /// References and Prompts have no text of their own here: they open full size.
+    /// Return or double-click: type into an Idea's title, a Note's, Sticky's or Text's words, a
+    /// Shape's label, a Prompt's prompt or a Link's title. Pictures open full size.
     func beginEditing(_ id: UUID? = nil) {
         guard let id = id ?? selectedNode?.id, let node = self.node(id), editingID != id else { return }
         endEditing()
@@ -702,7 +699,10 @@ final class CanvasController {
             // Arrows and lines have no words.
             guard !node.isLine else { return }
             editDraft = node.body ?? ""
-        case .reference, .prompt:
+        case .prompt:
+            // Written right on the board; Space opens it full size for the rest.
+            editDraft = node.reference?.copyablePrompt ?? ""
+        case .reference:
             openDetail(id)
             return
         }
@@ -733,7 +733,9 @@ final class CanvasController {
                 if text != (node.title ?? "") { CanvasGraph.edit(node) { $0.title = text.isEmpty ? nil : text } }
             case .note, .text, .sticky, .shape:
                 if text != (node.body ?? "") { CanvasGraph.edit(node) { $0.body = text } }
-            case .reference, .prompt:
+            case .prompt:
+                CanvasGraph.setPrompt(text, of: node)
+            case .reference:
                 break
             }
         }
@@ -1460,17 +1462,37 @@ final class CanvasController {
     var promptToCopy: String? {
         switch detailItem {
         case .reference(let reference):
-            return reference.copyablePrompt
+            return reference.promptToCopy
         case .node(let id):
-            return node(id)?.reference?.copyablePrompt
+            return node(id)?.reference?.promptToCopy
         case nil:
-            return selectedNode?.reference?.copyablePrompt
+            return selectedNode?.reference?.promptToCopy
         }
     }
 
     /// ⌘⇧C.
     func copyPrompt() {
         if let prompt = promptToCopy { Pasteboard.copy(prompt) }
+    }
+
+    // MARK: Taking it to an AI
+
+    /// The board written out for an AI, or just the selection (and what's attached to it).
+    func aiPack() -> AIPack {
+        endEditing()
+        return currentAIPack
+    }
+
+    /// The same, as things stand, without ending a text edit: safe to read while drawing.
+    var currentAIPack: AIPack {
+        let instruction = UserDefaults.standard.string(forKey: AIPack.instructionKey) ?? ""
+        return AIPack.make(from: canvas, only: selection.isEmpty ? nil : selection, instruction: instruction)
+    }
+
+    /// ⌥⌘C: the pack's text, to paste into any AI chat. Its pictures are named by number;
+    /// Export for AI writes them out too.
+    func copyForAI() {
+        Pasteboard.copy(aiPack().markdown)
     }
 
     /// Where a node is on screen, for the detail to grow out of and shrink back into.

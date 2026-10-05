@@ -14,7 +14,7 @@ struct ReferenceMenu: View {
 
     var body: some View {
         Button("Copy Prompt", systemImage: "text.quote") {
-            if let prompt = reference.copyablePrompt { Pasteboard.copy(prompt) }
+            if let prompt = reference.promptToCopy { Pasteboard.copy(prompt) }
         }
         .disabled(reference.copyablePrompt == nil)
 

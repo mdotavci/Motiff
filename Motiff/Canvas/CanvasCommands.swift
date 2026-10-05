@@ -45,6 +45,8 @@ struct CanvasEditActions {
     var hasWords: Bool
     var biggerText: @MainActor () -> Void
     var smallerText: @MainActor () -> Void
+    var copyForAI: @MainActor () -> Void
+    var exportForAI: @MainActor () -> Void
 }
 
 /// File › Import… (⌘O) in the focused Library or Canvas.
@@ -137,6 +139,15 @@ struct CanvasCommands: Commands {
                 .disabled(editing == nil)
             Button(ShortcutCatalog.addSubIdea.title) { editing?.addSubIdea() }
                 .shortcut(ShortcutCatalog.addSubIdea)
+                .disabled(editing == nil)
+            Divider()
+            Button(editing?.hasSelection == true ? "Copy Selection for AI" : ShortcutCatalog.copyForAI.title) {
+                editing?.copyForAI()
+            }
+            .shortcut(ShortcutCatalog.copyForAI)
+            .disabled(editing == nil)
+            Button(ShortcutCatalog.exportForAI.title) { editing?.exportForAI() }
+                .shortcut(ShortcutCatalog.exportForAI)
                 .disabled(editing == nil)
             Divider()
             Button(ShortcutCatalog.biggerText.title) { editing?.biggerText() }

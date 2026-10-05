@@ -76,6 +76,7 @@ targets:
       - Motiff/Canvas/Graph/ForceLayout.swift
       - Motiff/Canvas/Palette/FuzzyMatch.swift
       - Motiff/Canvas/Search/CanvasSearch.swift
+      - Motiff/Canvas/Export/AIPack.swift
       - Motiff/Canvas/Debug/CanvasStress.swift
       - Motiff/Storage
       - Shared

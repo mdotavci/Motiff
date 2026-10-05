@@ -119,7 +119,10 @@ struct CardView: View {
             }
         case .prompt:
             if let reference = node.reference {
-                PromptCardContent(reference: reference, colorHex: node.effectiveColorHex, width: size.width, zoom: zoom)
+                PromptCardContent(
+                    reference: reference, colorHex: node.effectiveColorHex, width: size.width, zoom: zoom,
+                    editor: editor, nodeID: node.id
+                )
             } else {
                 MissingReference()
             }
@@ -345,6 +348,9 @@ private struct PromptCardContent: View {
     let colorHex: String?
     let width: CGFloat
     let zoom: CGFloat
+    /// Set while the prompt is being written on the board.
+    var editor: CanvasController?
+    var nodeID = UUID()
 
     var body: some View {
         let prompt = reference.copyablePrompt ?? ""
@@ -361,11 +367,17 @@ private struct PromptCardContent: View {
                         PurposeBadge(purpose: purpose).padding(6)
                     }
                 }
-            Text(prompt)
-                .font(.system(size: 11, design: .monospaced))
-                .lineLimit(5)
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
+            Group {
+                if let editor {
+                    InlineEditor(controller: editor, nodeID: nodeID, prompt: "Write the prompt", axis: .vertical)
+                } else {
+                    Text(prompt)
+                        .lineLimit(5)
+                }
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
             Spacer(minLength: 0)
             HStack {
                 Text(reference.model ?? "Prompt")
@@ -373,7 +385,7 @@ private struct PromptCardContent: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
-                Button("Copy Prompt", systemImage: "doc.on.doc") { Pasteboard.copy(prompt) }
+                Button("Copy Prompt", systemImage: "doc.on.doc") { Pasteboard.copy(reference.promptToCopy ?? prompt) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .font(.system(size: 12))
