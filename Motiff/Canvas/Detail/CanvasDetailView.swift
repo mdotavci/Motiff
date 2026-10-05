@@ -18,6 +18,13 @@ struct CanvasDetailView: View {
         // Fills the Map even while its content is still loading, so nothing shows through.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
+        #if os(macOS)
+        // ⌘V outside a text field: a screenshot or image goes onto this node, under Attached.
+        .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
+            guard case let .node(id) = item else { return }
+            Task { await controller.paste(providers, onto: id) }
+        }
+        #endif
         .environment(\.openReference, OpenReferenceAction { [controller] reference in
             controller.openDetail(reference: reference)
         })
@@ -37,6 +44,7 @@ struct CanvasDetailView: View {
                             ConnectionList(node: node, showsChildren: true) { other in
                                 controller.openDetail(other.id)
                             }
+                            DetailPasteButton(controller: controller, nodeID: node.id)
                         }
                         .id(node.id)
                     } else {
@@ -286,6 +294,7 @@ private struct IdeaDetailView: View {
                 AddTile(title: "Images", systemImage: "photo") { isImporting = true }
                 AddTile(title: "From Library", systemImage: "square.grid.2x2") { showsLibrary = true }
             }
+            DetailPasteButton(controller: controller, nodeID: node.id)
         }
     }
 
@@ -323,6 +332,26 @@ private struct TitleField: View {
     private func save() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed != value { commit(trimmed) }
+    }
+}
+
+/// Pastes what's on the clipboard (a screenshot, an image, a link, text) onto this node. On the
+/// Mac ⌘V does the same.
+private struct DetailPasteButton: View {
+    let controller: CanvasController
+    let nodeID: UUID
+
+    var body: some View {
+        HStack(spacing: Theme.unit) {
+            PasteButton(supportedContentTypes: CaptureService.acceptedTypes) { providers in
+                Task { await controller.paste(providers, onto: nodeID) }
+            }
+            .tint(.primary)
+            #if os(macOS)
+            Text("or ⌘V: a screenshot or image lands under Attached").font(.caption).foregroundStyle(.secondary)
+            #endif
+        }
+        .padding(.top, Theme.unit)
     }
 }
 

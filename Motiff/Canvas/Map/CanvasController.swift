@@ -1291,9 +1291,21 @@ final class CanvasController {
         if target != dropTargetID { dropTargetID = target }
     }
 
-    /// What pasted and imported things attach to: the selected node's Idea. With nothing
-    /// selected they land loose, in the middle of the view.
-    var pasteTargetID: UUID? { selectedNode?.id }
+    /// What pasted and imported things attach to: the selected node, if it can hold things.
+    /// With nothing selected they land loose.
+    var pasteTargetID: UUID? { selectedNode.flatMap { CanvasGraph.canHold($0) ? $0.id : nil } }
+
+
+    /// ⌘V on the board: where the pointer is (or the middle of the view), onto the selected
+    /// node if it can hold things.
+    func paste(_ providers: [NSItemProvider]) async {
+        await capture(providers, at: pointer, onto: pasteTargetID)
+    }
+
+    /// ⌘V or Paste in a node's full-size view: onto that node.
+    func paste(_ providers: [NSItemProvider], onto id: UUID) async {
+        await capture(providers, at: nil, onto: id)
+    }
 
     /// Reads, prepares and places what was dropped or pasted.
     func capture(_ providers: [NSItemProvider], at viewPoint: CGPoint?, onto targetID: UUID?) async {
@@ -1319,8 +1331,8 @@ final class CanvasController {
         place(prepared, at: point, onto: targetID)
     }
 
-    /// The Library panel: a card for each Reference (no copy; the same Reference), on the Idea
-    /// under the drop or the selected one, or loose where it was dropped.
+    /// The Library panel: a picture or card for each Reference (no copy; the same Reference), on
+    /// the node under the drop or the selected one, or loose where it was dropped.
     func place(references ids: [UUID], at point: CGPoint? = nil, onto targetID: UUID?) {
         let all = (try? context?.fetch(FetchDescriptor<Reference>())) ?? []
         let references = ids.compactMap { id in all.first { $0.id == id } }
@@ -1335,9 +1347,9 @@ final class CanvasController {
         }
     }
 
-    /// Puts captured things on the Canvas, all in one Undo step. Dropped on an Idea (or one of
-    /// its cards) they belong to that Idea and take free spots around it; dropped on empty space
-    /// they stay loose where they landed, fanned out a little.
+    /// Puts captured things on the board, all in one Undo step. Dropped or pasted onto a node
+    /// that can hold things they belong to it and take free spots around it; elsewhere they stay
+    /// loose where they landed, fanned out a little.
     func place(_ prepared: [PreparedCapture], at point: CGPoint, onto targetID: UUID?) {
         guard !prepared.isEmpty else {
             Self.refuse()
@@ -1363,8 +1375,8 @@ final class CanvasController {
         }
     }
 
-    /// Makes a node for each item, in one Undo step. Onto an Idea (or one of its cards) they
-    /// belong to that Idea and take free spots around it; otherwise they stay loose at `point`,
+    /// Makes a node for each item, in one Undo step. Onto a node that can hold things (`CanvasGraph.canHold`)
+    /// they belong to it and take free spots around it; otherwise they stay loose at `point`,
     /// fanned out a little. Selects what was made.
     private func placeEach<Item>(
         _ items: [Item],
@@ -1374,14 +1386,13 @@ final class CanvasController {
     ) {
         guard let context else { return }
         endEditing()
-        let target = targetID.flatMap { self.node($0) }
-        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
+        let parent = targetID.flatMap { self.node($0) }.flatMap { CanvasGraph.canHold($0) ? $0 : nil }
         var made: [CanvasNode] = []
         for item in items {
             let offset = CGFloat(made.count) * 28
             let position = CGPoint(x: point.x + offset, y: point.y + offset)
-            guard let node = make(item, position, idea, context) else { continue }
-            if let idea { node.position = CanvasGraph.freeSpot(for: node, around: idea) }
+            guard let node = make(item, position, parent, context) else { continue }
+            if let parent { node.position = CanvasGraph.freeSpot(for: node, around: parent) }
             made.append(node)
         }
         save()

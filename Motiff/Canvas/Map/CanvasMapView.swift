@@ -55,10 +55,10 @@ struct CanvasMapView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             #if os(macOS)
-            // ⌘V: images, links and prompts go onto the selected Idea (or the root).
+            // ⌘V: screenshots, images, links and prompts land where the pointer is, or onto the
+            // selected note, prompt, picture or Idea.
             .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
-                let target = controller.pasteTargetID
-                Task { await controller.capture(providers, at: nil, onto: target) }
+                Task { await controller.paste(providers) }
             }
             #endif
     }
@@ -344,7 +344,12 @@ struct CanvasMapView: View {
         #if os(iOS)
         VStack(spacing: Theme.unit) {
             sides
-            ToolBar(controller: controller, pickPhotos: { showsPhotos = true }, pickFiles: { isImporting = true })
+            ToolBar(
+                controller: controller,
+                pickPhotos: { showsPhotos = true },
+                pickFiles: { isImporting = true },
+                paste: { providers in Task { await controller.paste(providers) } }
+            )
         }
         .padding(Theme.gutter)
         #else

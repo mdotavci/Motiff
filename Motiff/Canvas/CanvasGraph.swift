@@ -156,6 +156,16 @@ enum CanvasGraph {
         return node
     }
 
+    /// Ideas, notes, stickies, prompts and pictures can have things attached to them (an
+    /// example image under a prompt, a screenshot under a note); text, shapes, links and
+    /// arrows can't.
+    static func canHold(_ node: CanvasNode) -> Bool {
+        switch node.kind {
+        case .idea, .note, .sticky, .prompt, .reference: true
+        case .text, .shape, .link: false
+        }
+    }
+
     /// A sticky note at `position`, loose, in its color (yellow unless one is given).
     @discardableResult
     static func addSticky(to canvas: Canvas, at position: CGPoint, text: String = "", colorHex: String = "#F6D77A", in context: ModelContext) -> CanvasNode {

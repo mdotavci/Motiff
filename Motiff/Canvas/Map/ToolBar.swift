@@ -88,6 +88,8 @@ struct ToolBar: View {
     /// iPhone: the Image button picks from Photos or Files right away instead of being a tool.
     var pickPhotos: (() -> Void)?
     var pickFiles: (() -> Void)?
+    /// iPhone: a Paste button at the end (there's no ⌘V).
+    var paste: (([NSItemProvider]) -> Void)?
 
     private static let groups: [[CanvasTool]] = [
         [.select, .hand],
@@ -120,6 +122,13 @@ struct ToolBar: View {
                 help: "Library: drag references onto the board (\(ShortcutCatalog.libraryPanel.keys))",
                 action: controller.toggleLibrary
             )
+            if let paste {
+                PasteButton(supportedContentTypes: CaptureService.acceptedTypes, payloadAction: paste)
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.roundedRectangle(radius: 7))
+                    .tint(.primary)
+                    .padding(.leading, 2)
+            }
         }
         .padding(4)
     }

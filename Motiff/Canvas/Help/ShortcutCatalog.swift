@@ -75,9 +75,11 @@ enum ShortcutCatalog {
     // MARK: Bringing things in
 
     static let importFiles = Shortcut("Import Images or Videos…", "o", .command)
-    static let paste = Shortcut("Paste Images, Links or Prompts", "v", .command)
+    static let paste = Shortcut("Paste Screenshots, Images, Links or Prompts (Where the Pointer Is)", "v", .command)
+    static let pasteOnto = Shortcut("Paste Onto a Note, Prompt, Picture or Idea", pointer: "Select it, then ⌘V")
+    static let pasteInDetail = Shortcut("Paste Into a Note or Prompt You Have Open", pointer: "⌘V, or Paste, in its full view")
     static let dropIn = Shortcut("Bring In Files, Images or Links", pointer: "Drag them in from Finder or a browser")
-    static let dropOnIdea = Shortcut("Attach to an Idea", pointer: "Drop onto the Idea")
+    static let dropOnIdea = Shortcut("Attach to a Note, Prompt, Picture or Idea", pointer: "Drop onto it")
 
     // MARK: Library
 
@@ -232,7 +234,7 @@ enum ShortcutCatalog {
 
     static let sections: [ShortcutSection] = [
         ShortcutSection(title: "Motiff", items: [goTo, undo, redo, showShortcuts]),
-        ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
+        ShortcutSection(title: "Bringing things in", items: [importFiles, paste, pasteOnto, pasteInDetail, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
         ShortcutSection(title: "Boards", items: [newCanvas, addToBoard, addToBoardFromMenu]),
         ShortcutSection(title: "Board", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),

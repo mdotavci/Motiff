@@ -49,7 +49,9 @@ enum CaptureService {
            let url = URL(dataRepresentation: data, relativeTo: nil) {
             return .file(url)
         }
-        if let type = provider.registeredContentTypes.first(where: { $0.conforms(to: .image) }),
+        // PNG when there's a choice (a screenshot often comes as PNG and TIFF), else any image.
+        let types = provider.registeredContentTypes
+        if let type = types.first(where: { $0.conforms(to: .png) }) ?? types.first(where: { $0.conforms(to: .image) }),
            let data = await data(from: provider, type: type) {
             return .imageData(data, type)
         }
@@ -172,8 +174,9 @@ enum CapturePrep {
     }
 
     private static func storeMedia(_ data: Data, type: UTType, source: URL?) async -> PreparedCapture? {
-        guard let mediaType = mediaType(for: type),
-              let filename = try? MediaStore.store(data, fileExtension: type.preferredFilenameExtension ?? "png")
+        let stored = ImageConversion.storable(data, type: type)
+        guard let mediaType = mediaType(for: stored.type),
+              let filename = try? MediaStore.store(stored.data, fileExtension: stored.type.preferredFilenameExtension ?? "png")
         else { return nil }
         let size = await mediaSize(of: MediaStore.url(for: filename), type: mediaType)
         return .media(filename: filename, type: mediaType, width: size.width, height: size.height, source: source)
