@@ -44,6 +44,17 @@ for route in "$@"; do
   sleep 7
   xcrun simctl io "$UDID" screenshot "$OUT/$name.png" > /dev/null 2>&1
   echo "Saved $OUT/$name.png ($route)"
+
+  # If the app hung or died on this route, keep what explains it next to the screenshot:
+  # a sample of the running process (its main thread), or the newest crash report.
+  pid=$(pgrep -f "Motiff.app/Motiff$" | head -1 || true)
+  if [ -n "$pid" ]; then
+    sample "$pid" 1 -file "$OUT/$name.sample.txt" > /dev/null 2>&1 || true
+  else
+    crash=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/Motiff*.ips 2>/dev/null | head -1 || true)
+    if [ -n "$crash" ]; then cp "$crash" "$OUT/$name.crash.ips"; fi
+    echo "  App is not running after $route"
+  fi
 done
 
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
