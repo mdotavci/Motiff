@@ -50,3 +50,31 @@ struct CanvasViewport: Equatable, Sendable {
 
     static let initial = CanvasViewport(centerX: 0, centerY: 0, zoom: 1)
 }
+
+/// The three ways to look at a Canvas.
+enum CanvasViewMode: String, CaseIterable, Identifiable, Sendable {
+    /// Ideas and cards where you put them.
+    case map
+    /// An indented list, for reordering and restructuring from the keyboard.
+    case outline
+    /// Dots and lines laid out by force, to see the shape of it.
+    case graph
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .map: "Map"
+        case .outline: "Outline"
+        case .graph: "Graph"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .map: "rectangle.3.group"
+        case .outline: "list.bullet.indent"
+        case .graph: "point.3.connected.trianglepath.dotted"
+        }
+    }
+}

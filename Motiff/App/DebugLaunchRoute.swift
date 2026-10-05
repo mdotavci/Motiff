@@ -7,13 +7,14 @@ import AppKit
 /// Launch arguments that let CI (and agents) open a screen and snapshot it without clicking.
 /// They land in UserDefaults' argument domain, so there's nothing to parse:
 ///
-///     -MotiffOpen library | inbox | boards | canvas:<title>
+///     -MotiffOpen library | inbox | boards | canvasgraph | canvas:<title>
 ///     -MotiffSnapshot <name>     writes Snapshots/<name>.png in the library folder (Mac)
 ///     -MotiffSelect <title>      on a Canvas, selects the node with that title
 ///     -MotiffInspector YES       on a Canvas, opens the inspector
 ///     -MotiffDetail YES          on a Canvas, opens the selected node full size
 ///     -MotiffPaste <text>        on a Canvas, pastes the text onto the selected Idea
 ///     -MotiffFilter <category>   on a Canvas, filters the legend to that category
+///     -MotiffView outline|graph  on a Canvas, opens that view
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
@@ -32,6 +33,10 @@ enum DebugLaunchRoute {
 
     static var showsInspector: Bool {
         UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var viewName: String? {
+        UserDefaults.standard.string(forKey: "MotiffView")
     }
 
     static var filterName: String? {
@@ -62,6 +67,7 @@ enum DebugLaunchRoute {
         switch route {
         case "inbox": return .inbox
         case "boards": return .boards
+        case "canvasgraph": return .canvasGraph
         case let route where route.hasPrefix("canvas:"):
             let title = String(route.dropFirst("canvas:".count))
             if let canvas = canvases.first(where: { $0.title == title }) {

@@ -387,6 +387,45 @@ enum CanvasGraph {
 
     // MARK: Order
 
+    /// Moves a node one place up (-1) or down (+1) among its siblings. False at either end.
+    @discardableResult
+    static func moveAmongSiblings(_ node: CanvasNode, by step: Int) -> Bool {
+        var level = siblings(of: node)
+        guard let index = level.firstIndex(where: { $0 === node }),
+              level.indices.contains(index + step)
+        else { return false }
+        level.swapAt(index, index + step)
+        renumber(level)
+        touch(node.canvas)
+        return true
+    }
+
+    /// Tab in the Outline: the node goes under the sibling above it, as its last child.
+    @discardableResult
+    static func indent(_ node: CanvasNode, in context: ModelContext) -> Bool {
+        let level = siblings(of: node)
+        guard let index = level.firstIndex(where: { $0 === node }), index > 0, !node.isRoot else { return false }
+        return setParent(node, to: level[index - 1], in: context)
+    }
+
+    /// ⇧Tab in the Outline: the node moves up a level, right after the node it was under.
+    /// Out from under a root it becomes loose.
+    @discardableResult
+    static func outdent(_ node: CanvasNode, in context: ModelContext) -> Bool {
+        guard let parent = node.parent, setParent(node, to: parent.parent, in: context) else { return false }
+        var level = siblings(of: node).filter { $0 !== node }
+        let after = level.firstIndex(where: { $0 === parent }).map { $0 + 1 } ?? level.count
+        level.insert(node, at: after)
+        renumber(level)
+        return true
+    }
+
+    private static func renumber(_ nodes: [CanvasNode]) {
+        for (index, node) in nodes.enumerated() where node.sortIndex != Double(index) {
+            node.sortIndex = Double(index)
+        }
+    }
+
     /// The node and the others at its level, in order: what ← and → step through in the detail.
     static func siblings(of node: CanvasNode) -> [CanvasNode] {
         if let parent = node.parent { return parent.sortedChildren }

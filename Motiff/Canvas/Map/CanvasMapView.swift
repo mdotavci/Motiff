@@ -4,8 +4,9 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
-/// The Canvas drawn as a map: lines underneath, Ideas and cards on top, a legend and zoom
-/// control floating over it. Drag the background (or two-finger scroll) to pan, pinch to zoom
+/// One Canvas, as a Map, an Outline or a Graph (⌘1 ⌘2 ⌘3), with the inspector, the full-size
+/// detail and the keyboard shared between them. The Map: lines underneath, Ideas and cards on
+/// top, a legend and zoom control floating over it. Drag the background (or two-finger scroll) to pan, pinch to zoom
 /// around the pointer. Click selects, drag moves, Tab and ⌘Return add, Return edits in place.
 struct CanvasMapView: View {
     let canvas: Canvas
@@ -27,13 +28,160 @@ struct CanvasMapView: View {
     }
 
     var body: some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #if os(macOS)
+            // ⌘V: images, links and prompts go onto the selected Idea (or the root).
+            .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
+                let target = controller.pasteTargetID
+                Task { await controller.capture(providers, at: nil, onto: target) }
+            }
+            #endif
+            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+                guard case let .success(urls) = result else { return }
+                let target = controller.pasteTargetID
+                Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: nil, onto: target) }
+            }
+            .focusable()
+            .focused($mapFocused)
+            .focusEffectDisabled()
+            .onKeyPress(
+                keys: [
+                    .tab, .return, .delete, .deleteForward, .escape, .space,
+                    .leftArrow, .rightArrow, .upArrow, .downArrow, "l", Self.backTab,
+                    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                ],
+                phases: [.down, .repeat]
+            ) { press in
+                handleKey(press)
+            }
+            .alert("Label", isPresented: isLabeling) {
+                TextField("Label", text: $labelDraft)
+                Button("Save") {
+                    if let edge = labelingEdge { controller.setLabel(labelDraft, on: edge) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("A word or two on the line. Leave it empty to remove the label.")
+            }
+            .overlay(alignment: .topLeading) {
+                // The open node grows out of its place on the Map and shrinks back into it.
+                ZStack {
+                    if let item = controller.detailItem {
+                        CanvasDetailView(controller: controller, item: item)
+                            .transition(.hero(from: heroSource(for: item), in: controller.viewSize))
+                    }
+                }
+                .animation(.snappy(duration: 0.32), value: controller.isShowingDetail)
+            }
+            .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
+                CanvasInspector(controller: controller)
+                    .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Picker("View", selection: Binding(get: { controller.viewMode }, set: { controller.setViewMode($0) })) {
+                        ForEach(CanvasViewMode.allCases) { mode in
+                            Label(mode.label, systemImage: mode.systemImage).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Map, Outline or Graph (⌘1, ⌘2, ⌘3)")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Inspector", systemImage: "sidebar.right", action: controller.toggleInspector)
+                        .help("Show Inspector (\(ShortcutCatalog.inspector.keys))")
+                }
+            }
+            .onAppear {
+                controller.reload()
+                if controller.editingID == nil { mapFocused = true }
+                #if DEBUG
+                controller.applyLaunchPaste()
+                #endif
+            }
+            .onChange(of: canvas.updatedAt) { controller.reload() }
+            .onChange(of: controller.editingID) { _, editing in
+                // Back to the Canvas view when typing ends, so Tab and ⌫ work again.
+                if editing == nil { mapFocused = true }
+            }
+            .onChange(of: controller.viewMode) { mapFocused = true }
+            #if os(macOS)
+            .onChange(of: controller.linkMode) { _, on in
+                if on { NSCursor.crosshair.push() } else { NSCursor.pop() }
+            }
+            .onDisappear {
+                if controller.linkMode { NSCursor.pop() }
+            }
+            #endif
+            .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
+            .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
+            .focusedSceneValue(\.canvasZoom, controller.viewMode == .map ? CanvasZoomActions(
+                zoomIn: controller.zoomIn,
+                zoomOut: controller.zoomOut,
+                fit: controller.fitToContent
+            ) : nil)
+            .focusedSceneValue(\.canvasEditing, CanvasEditActions(
+                hasSelection: !controller.selection.isEmpty,
+                showsInspector: controller.showsInspector,
+                addNote: controller.addNote,
+                addSubIdea: controller.addSubIdea,
+                edit: { controller.beginEditing() },
+                delete: { controller.deleteSelection(branch: false) },
+                deleteBranch: { controller.deleteSelection(branch: true) },
+                toggleInspector: controller.toggleInspector,
+                linkMode: controller.linkMode,
+                toggleLinkMode: controller.toggleLinkMode,
+                canOpen: controller.selectedNode != nil && !controller.isShowingDetail,
+                open: { controller.openDetail() },
+                canCopyPrompt: controller.promptToCopy != nil,
+                copyPrompt: controller.copyPrompt,
+                viewMode: controller.viewMode,
+                setViewMode: controller.setViewMode
+            ))
+            .navigationTitle(canvas.displayTitle)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch controller.viewMode {
+        case .map:
+            map
+        case .outline:
+            VStack(alignment: .leading, spacing: 0) {
+                CategoryLegend(controller: controller)
+                    .padding(Theme.gutter)
+                CanvasOutlineView(controller: controller) { mapFocused = true }
+            }
+            .background(.background)
+        case .graph:
+            ForceGraphView(
+                model: controller.graphModel,
+                selection: controller.selection,
+                highlighted: controller.highlighted
+            ) { id, extending in
+                if let id { controller.tap(id, extending: extending) } else { controller.clearSelection() }
+                mapFocused = true
+            } onOpen: { id in
+                controller.openDetail(id)
+            }
+            .overlay(alignment: .topLeading) {
+                CategoryLegend(controller: controller)
+                    .padding(Theme.gutter)
+            }
+        }
+    }
+
+    /// The Map: lines, nodes, handles, the line being drawn; legend, zoom and link-mode pill on top.
+    private var map: some View {
         let camera = controller.camera
         let size = controller.viewSize
         let shown = controller.displayedSnapshot
         let dragging = controller.drag?.ids ?? []
         let highlighted = controller.highlighted
         let targetID = controller.connect?.targetID
-        ZStack(alignment: .topLeading) {
+        return ZStack(alignment: .topLeading) {
             Theme.canvasGround
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -92,30 +240,8 @@ struct CanvasMapView: View {
         .gesture(panGesture)
         #if os(macOS)
         .modifier(ScrollZoomMonitor(controller: controller))
-        // ⌘V: images, links and prompts go onto the selected Idea (or the root).
-        .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
-            let target = controller.pasteTargetID
-            Task { await controller.capture(providers, at: nil, onto: target) }
-        }
         #endif
         .onDrop(of: CaptureService.acceptedTypes, delegate: CanvasDropDelegate(controller: controller))
-        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
-            guard case let .success(urls) = result else { return }
-            let target = controller.pasteTargetID
-            Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: nil, onto: target) }
-        }
-        .focusable()
-        .focused($mapFocused)
-        .focusEffectDisabled()
-        .onKeyPress(
-            keys: [
-                .tab, .return, .delete, .deleteForward, .escape, .space, .leftArrow, .rightArrow, "l",
-                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-            ],
-            phases: [.down, .repeat]
-        ) { press in
-            handleKey(press)
-        }
         .overlay(alignment: .topLeading) {
             CategoryLegend(controller: controller)
                 .padding(Theme.gutter)
@@ -135,81 +261,11 @@ struct CanvasMapView: View {
                 edgeMenu(edge)
             }
         }
-        .alert("Label", isPresented: isLabeling) {
-            TextField("Label", text: $labelDraft)
-            Button("Save") {
-                if let edge = labelingEdge { controller.setLabel(labelDraft, on: edge) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("A word or two on the line. Leave it empty to remove the label.")
-        }
-        .overlay(alignment: .topLeading) {
-            // The open node grows out of its place on the Map and shrinks back into it.
-            ZStack {
-                if let item = controller.detailItem {
-                    CanvasDetailView(controller: controller, item: item)
-                        .transition(.hero(from: heroSource(for: item), in: size))
-                }
-            }
-            .animation(.snappy(duration: 0.32), value: controller.isShowingDetail)
-        }
-        .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
-            CanvasInspector(controller: controller)
-                .inspectorColumnWidth(min: 240, ideal: 280, max: 400)
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Inspector", systemImage: "sidebar.right", action: controller.toggleInspector)
-                    .help("Show Inspector (\(ShortcutCatalog.inspector.keys))")
-            }
-        }
-        .onAppear {
-            controller.reload()
-            if controller.editingID == nil { mapFocused = true }
-            #if DEBUG
-            controller.applyLaunchPaste()
-            #endif
-        }
-        .onChange(of: canvas.updatedAt) { controller.reload() }
-        .onChange(of: controller.editingID) { _, editing in
-            // Back to the Map when typing ends, so Tab and ⌫ work again.
-            if editing == nil { mapFocused = true }
-        }
-        #if os(macOS)
-        .onChange(of: controller.linkMode) { _, on in
-            if on { NSCursor.crosshair.push() } else { NSCursor.pop() }
-        }
-        .onDisappear {
-            if controller.linkMode { NSCursor.pop() }
-        }
-        #endif
-        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
-        .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
-        .focusedSceneValue(\.canvasZoom, CanvasZoomActions(
-            zoomIn: controller.zoomIn,
-            zoomOut: controller.zoomOut,
-            fit: controller.fitToContent
-        ))
-        .focusedSceneValue(\.canvasEditing, CanvasEditActions(
-            hasSelection: !controller.selection.isEmpty,
-            showsInspector: controller.showsInspector,
-            addNote: controller.addNote,
-            addSubIdea: controller.addSubIdea,
-            edit: { controller.beginEditing() },
-            delete: { controller.deleteSelection(branch: false) },
-            deleteBranch: { controller.deleteSelection(branch: true) },
-            toggleInspector: controller.toggleInspector,
-            linkMode: controller.linkMode,
-            toggleLinkMode: controller.toggleLinkMode,
-            canOpen: controller.selectedNode != nil && !controller.isShowingDetail,
-            open: { controller.openDetail() },
-            canCopyPrompt: controller.promptToCopy != nil,
-            copyPrompt: controller.copyPrompt
-        ))
-        .navigationTitle(canvas.displayTitle)
+        .onAppear { controller.revealPending() }
     }
+
+    /// ⇧Tab arrives as the back-tab character.
+    private static var backTab: KeyEquivalent { KeyEquivalent("\u{19}") }
 
     /// One node at canvas scale, scaled and placed on screen, with its selection ring and the
     /// lift while it's dragged.
@@ -304,7 +360,7 @@ struct CanvasMapView: View {
     }
 
     private func heroSource(for item: CanvasController.DetailItem) -> CGRect? {
-        guard case let .node(id) = item else { return nil }
+        guard controller.viewMode == .map, case let .node(id) = item else { return nil }
         return controller.screenRect(of: id)
     }
 
@@ -351,6 +407,13 @@ struct CanvasMapView: View {
             controller.assignCategory(number: number)
             return .handled
         }
+        if controller.viewMode == .outline, let handled = handleOutlineKey(press) {
+            return handled
+        }
+        if controller.viewMode == .graph, press.key == .return, plain {
+            controller.showOnMap(controller.selectedNode?.id)
+            return .handled
+        }
         switch press.key {
         case .tab where plain:
             controller.addNote()
@@ -374,6 +437,32 @@ struct CanvasMapView: View {
             }
         default:
             return .ignored
+        }
+        return .handled
+    }
+
+    /// The Outline's own keys; nil for anything it leaves to the shared ones.
+    private func handleOutlineKey(_ press: KeyPress) -> KeyPress.Result? {
+        let modifiers = press.modifiers.intersection([.command, .shift, .option, .control])
+        switch press.key {
+        case .upArrow where modifiers == [.command, .option]:
+            controller.moveSelected(by: -1)
+        case .downArrow where modifiers == [.command, .option]:
+            controller.moveSelected(by: 1)
+        case .upArrow where modifiers.isEmpty:
+            controller.stepOutline(by: -1)
+        case .downArrow where modifiers.isEmpty:
+            controller.stepOutline(by: 1)
+        case .leftArrow where modifiers.isEmpty:
+            controller.collapseOrSelectParent()
+        case .rightArrow where modifiers.isEmpty:
+            controller.expandSelected()
+        case .tab where modifiers.isEmpty:
+            controller.indentSelected()
+        case .tab where modifiers == .shift, Self.backTab:
+            controller.outdentSelected()
+        default:
+            return nil
         }
         return .handled
     }

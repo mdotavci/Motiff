@@ -29,6 +29,8 @@ struct CanvasEditActions {
     var open: @MainActor () -> Void
     var canCopyPrompt: Bool
     var copyPrompt: @MainActor () -> Void
+    var viewMode: CanvasViewMode
+    var setViewMode: @MainActor (CanvasViewMode) -> Void
 }
 
 /// File › Import… (⌘O) in the focused Library or Canvas.
@@ -67,6 +69,15 @@ struct CanvasCommands: Commands {
         }
 
         CommandMenu("Canvas") {
+            ForEach(CanvasViewMode.allCases) { mode in
+                Toggle(mode.label, isOn: Binding(
+                    get: { editing?.viewMode == mode },
+                    set: { if $0 { editing?.setViewMode(mode) } }
+                ))
+                .shortcut(ShortcutCatalog.view(mode))
+                .disabled(editing == nil)
+            }
+            Divider()
             Button(ShortcutCatalog.addNote.title) { editing?.addNote() }
                 .disabled(editing == nil)
             Button(ShortcutCatalog.addSubIdea.title) { editing?.addSubIdea() }

@@ -110,6 +110,29 @@ enum ShortcutCatalog {
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
 
+    // MARK: Canvas: views
+
+    static let mapView = Shortcut("Map", "1", .command)
+    static let outlineView = Shortcut("Outline", "2", .command)
+    static let graphView = Shortcut("Graph", "3", .command)
+
+    static func view(_ mode: CanvasViewMode) -> Shortcut {
+        switch mode {
+        case .map: mapView
+        case .outline: outlineView
+        case .graph: graphView
+        }
+    }
+
+    static let outlineStep = Shortcut("Outline: Previous or Next Row", pointer: "↑ ↓")
+    static let outlineFold = Shortcut("Outline: Fold or Unfold", pointer: "← →")
+    static let outlineIndent = Shortcut("Outline: Put Under the Row Above", .tab)
+    static let outlineOutdent = Shortcut("Outline: Move Up a Level", .tab, .shift)
+    static let outlineMoveUp = Shortcut("Outline: Move Up", .upArrow, [.command, .option])
+    static let outlineMoveDown = Shortcut("Outline: Move Down", .downArrow, [.command, .option])
+    static let graphShowOnMap = Shortcut("Graph: Show on the Map", .return)
+    static let graphOpen = Shortcut("Graph: Open Full Size", pointer: "Double-click a dot")
+
     // MARK: Canvas: categories
 
     static let assignCategory = Shortcut("Give the Selection a Category", pointer: "1 to 9, in legend order")
@@ -144,6 +167,10 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
+        ]),
+        ShortcutSection(title: "Canvas views", items: [
+            mapView, outlineView, graphView, outlineStep, outlineFold, outlineIndent, outlineOutdent,
+            outlineMoveUp, outlineMoveDown, graphShowOnMap, graphOpen,
         ]),
         ShortcutSection(title: "Canvas categories", items: [
             assignCategory, noCategory, filterCategory, filterMore, clearFilter,

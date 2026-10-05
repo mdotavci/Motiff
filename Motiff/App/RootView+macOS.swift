@@ -3,13 +3,14 @@ import SwiftData
 import SwiftUI
 
 enum SidebarItem: Hashable, CaseIterable {
-    case inbox, library, boards
+    case inbox, library, boards, canvasGraph
 
     var title: String {
         switch self {
         case .inbox: "Inbox"
         case .library: "Library"
         case .boards: "Boards"
+        case .canvasGraph: "Canvas Graph"
         }
     }
 
@@ -18,6 +19,7 @@ enum SidebarItem: Hashable, CaseIterable {
         case .inbox: "tray"
         case .library: "square.grid.2x2"
         case .boards: "rectangle.stack"
+        case .canvasGraph: "point.3.filled.connected.trianglepath.dotted"
         }
     }
 
@@ -26,13 +28,14 @@ enum SidebarItem: Hashable, CaseIterable {
         case .inbox: .inbox
         case .library: .library
         case .boards: .boards
+        case .canvasGraph: .canvasGraph
         }
     }
 }
 
 /// What the sidebar has selected: a fixed section, or one Canvas file.
 enum SidebarSelection: Hashable {
-    case inbox, library, boards
+    case inbox, library, boards, canvasGraph
     case canvas(UUID)
 }
 
@@ -122,6 +125,8 @@ struct RootView: View {
             InboxView()
         case .boards:
             BoardsView()
+        case .canvasGraph:
+            CanvasGraphOverview { canvas in selection = .canvas(canvas.id) }
         case .canvas(let id):
             if let canvas = canvases.first(where: { $0.id == id }) {
                 CanvasMapView(canvas: canvas)

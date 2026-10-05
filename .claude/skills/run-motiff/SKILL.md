@@ -38,14 +38,14 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
 
 `Motiff/App/DebugLaunchRoute.swift` reads them from UserDefaults' argument domain:
 
-- `-MotiffOpen library|inbox|boards|canvas:<title>` selects that sidebar item.
+- `-MotiffOpen library|inbox|boards|canvasgraph|canvas:<title>` selects that sidebar item.
 - `-MotiffSnapshot <name>` writes `Snapshots/<name>.png` into the library folder
   (`~/Library/Containers/com.mdotavci.motiff/Data/Library/Application Support/Motiff/`).
   If a sheet is open, the sheet is what's drawn.
 - `-MotiffSelect <title>` selects that node on the opened Canvas (exact title, else the first
   that starts with it); `-MotiffInspector YES` opens the inspector; `-MotiffDetail YES` opens
   the selected node full size; `-MotiffPaste <text>` pastes onto the selected Idea;
-  `-MotiffFilter <category>` filters the legend; `-MotiffShortcuts YES` opens the keyboard
+  `-MotiffFilter <category>` filters the legend; `-MotiffView outline|graph` switches view; `-MotiffShortcuts YES` opens the keyboard
   shortcuts sheet.
 
 In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:

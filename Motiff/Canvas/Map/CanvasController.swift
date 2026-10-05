@@ -64,6 +64,13 @@ final class CanvasController {
         }
     }
 
+    /// Map, Outline or Graph (⌘1 ⌘2 ⌘3).
+    private(set) var viewMode: CanvasViewMode = .map
+    /// Outline rows whose children are folded away.
+    private(set) var collapsed: Set<UUID> = []
+    /// A node to bring into view once the Map is showing (from the Graph's Return).
+    @ObservationIgnored private var pendingRevealID: UUID?
+
     /// Legend filters: only nodes in these categories, and with these prompt purposes, stay at
     /// full strength. Empty means no filter. Filters dim; they never hide.
     private(set) var categoryFilter: Set<UUID> = []
@@ -108,6 +115,7 @@ final class CanvasController {
         #if DEBUG
         applyLaunchSelection()
         applyLaunchFilter()
+        if let mode = DebugLaunchRoute.viewName.flatMap(CanvasViewMode.init(rawValue:)) { viewMode = mode }
         #endif
     }
 
@@ -160,6 +168,7 @@ final class CanvasController {
         viewSize = size
         if isAutoFitted { needsFit = true }
         fitIfNeeded()
+        revealPending()
     }
 
     // MARK: Moving the camera
@@ -649,6 +658,125 @@ final class CanvasController {
         #if os(macOS)
         NSSound.beep()
         #endif
+    }
+
+    // MARK: Views
+
+    func setViewMode(_ mode: CanvasViewMode) {
+        guard mode != viewMode else { return }
+        endEditing()
+        if linkMode { toggleLinkMode() }
+        viewMode = mode
+    }
+
+    /// Return in the Graph: back to the Map, at that node.
+    func showOnMap(_ id: UUID?) {
+        if let id {
+            selection = [id]
+            pendingRevealID = id
+        }
+        setViewMode(.map)
+        revealPending()
+    }
+
+    func revealPending() {
+        guard viewMode == .map, viewSize.width > 0, let id = pendingRevealID else { return }
+        pendingRevealID = nil
+        reveal(id)
+    }
+
+    /// What the legend filters let through, nil when no filter is on. The Outline dims by this
+    /// alone; the selection's neighbors mean little in a list.
+    var filterMatches: Set<UUID>? {
+        snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+    }
+
+    // MARK: Outline
+
+    var outlineRows: [CanvasOutline.Row] {
+        CanvasOutline.rows(of: canvas, collapsed: collapsed)
+    }
+
+    func toggleCollapsed(_ id: UUID) {
+        if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+    }
+
+    /// ↑ / ↓: the row above or below the selected one.
+    func stepOutline(by step: Int) {
+        let rows = outlineRows
+        guard !rows.isEmpty else { return }
+        let current = selectedNode.flatMap { node in rows.firstIndex { $0.id == node.id } }
+        let next = current.map { min(max($0 + step, 0), rows.count - 1) } ?? (step > 0 ? 0 : rows.count - 1)
+        endEditing()
+        selection = [rows[next].id]
+    }
+
+    /// ←: fold the selected row, or if it's already folded (or has nothing under it), go to its parent.
+    func collapseOrSelectParent() {
+        guard let node = selectedNode else { return }
+        if !node.children.isEmpty, !collapsed.contains(node.id) {
+            collapsed.insert(node.id)
+        } else if let parent = node.parent {
+            selection = [parent.id]
+        }
+    }
+
+    /// →: unfold the selected row.
+    func expandSelected() {
+        guard let node = selectedNode else { return }
+        collapsed.remove(node.id)
+    }
+
+    /// Tab in the Outline.
+    func indentSelected() {
+        outlineChange { node, context in
+            let done = CanvasGraph.indent(node, in: context)
+            if done, let parent = node.parent { collapsed.remove(parent.id) }
+            return done
+        }
+    }
+
+    /// ⇧Tab in the Outline.
+    func outdentSelected() {
+        outlineChange { node, context in CanvasGraph.outdent(node, in: context) }
+    }
+
+    /// ⌥⌘↑ / ⌥⌘↓.
+    func moveSelected(by step: Int) {
+        outlineChange { node, _ in CanvasGraph.moveAmongSiblings(node, by: step) }
+    }
+
+    private func outlineChange(_ change: (CanvasNode, ModelContext) -> Bool) {
+        endEditing()
+        guard let context, let node = selectedNode else { return }
+        if change(node, context) {
+            save()
+            reload()
+        } else {
+            Self.refuse()
+        }
+    }
+
+    // MARK: Graph
+
+    /// The Canvas as dots and lines: Ideas bigger and labeled, cards small, seeded from where
+    /// they are on the Map.
+    var graphModel: ForceGraphModel {
+        ForceGraphModel(
+            nodes: snapshot.nodes.map { node in
+                ForceGraphModel.Node(
+                    id: node.id,
+                    label: node.title,
+                    colorHex: node.colorHex,
+                    radius: node.kind == .idea ? node.rect.width / 10 : 4.5,
+                    seed: node.center,
+                    showsLabel: node.kind == .idea
+                )
+            },
+            edges: snapshot.edges.map { edge in
+                ForceGraphModel.Edge(from: edge.from, to: edge.to, dashed: edge.type == .relatesTo)
+            }
+        )
     }
 
     // MARK: Bringing things in

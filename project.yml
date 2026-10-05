@@ -71,6 +71,8 @@ targets:
       - Motiff/Canvas/Map/CanvasCamera.swift
       - Motiff/Canvas/Map/CanvasSnapshot.swift
       - Motiff/Capture/PromptPurposeGuess.swift
+      - Motiff/Canvas/Outline/CanvasOutline.swift
+      - Motiff/Canvas/Graph/ForceLayout.swift
       - Motiff/Storage
       - Shared
     settings:
