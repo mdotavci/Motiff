@@ -57,6 +57,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 | Connecting | Drag a node's handle onto another: it belongs to that one; ⌥-drag or L mode links them. Right-click a line to label, convert or delete it | Belonging is the common case, so it gets the plain gesture |
 | Detail | The open node is an overlay on the Map that grows out of the node and shrinks back; the Map underneath never changes. References use the same detail the Library does (`ReferenceDetailContent`), plus Connections | Esc finds the Canvas exactly as it was |
 | Capture | `Capture/CaptureService` for both Library and Canvas: files are copied into Media, image addresses downloaded, other pages become Link cards (title and icon via LinkPresentation), text becomes a prompt with a guessed purpose. Media is Found; pasted prompts are Mine | One path in, so the Library and the Canvas can't drift |
+| Filters | The legend's category and purpose chips dim everything else (never hide it); 1–9 give the selection a category, 0 removes it | The map keeps its shape while you look at one part of it |
 | Undo | SwiftData's context uses the window's undo manager; a drag is one step; looking around (the viewport) isn't recorded | ⌘Z undoes edits, not panning |
 
 1. Models, migration, example Canvas, Canvases in the sidebar, New Canvas (⌘N) *(done)*
@@ -65,7 +66,7 @@ Graph, iPhone). Code lives in `Motiff/Canvas/`.
 4. Linking: handles, drag to link, link types, labels, selection highlight *(done)*
 5. Detail view from the Map, Esc back, sibling navigation, Connections *(done)*
 6. Drag and paste onto the Map (shares capture with step 4 above) *(done)*
-7. Category legend and filters; purpose filter in the Canvas and the Library
+7. Category legend and filters; purpose filter in the Canvas and the Library *(done)*
 8. Outline view, Graph view, cross-canvas graph
 9. ⌘K palette, search, minimap, semantic zoom, performance pass
 10. iPhone: Canvases tab, Outline first, touch Map

@@ -158,6 +158,7 @@ jobs:
             "canvas:Product photography look|select=Light|detail" \
             "canvas:Product photography look|select=Write a three-line|detail" \
             "canvas:Product photography look|select=Light|paste=matte ceramic mug on linen, hard window light --ar 4:5" \
+            "canvas:Product photography look|filter=Composition" \
             "library|shortcuts"
 
       # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with

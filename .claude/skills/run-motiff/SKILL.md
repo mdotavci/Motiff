@@ -44,7 +44,9 @@ snapshot per route to the branch `ci-snapshots/<your-branch>`.
   If a sheet is open, the sheet is what's drawn.
 - `-MotiffSelect <title>` selects that node on the opened Canvas (exact title, else the first
   that starts with it); `-MotiffInspector YES` opens the inspector; `-MotiffDetail YES` opens
-  the selected node full size; `-MotiffShortcuts YES` opens the keyboard shortcuts sheet.
+  the selected node full size; `-MotiffPaste <text>` pastes onto the selected Idea;
+  `-MotiffFilter <category>` filters the legend; `-MotiffShortcuts YES` opens the keyboard
+  shortcuts sheet.
 
 In `snapshot-mac.sh` and `build.yml`, add these to a route after `|`:
 `"canvas:Product photography look|select=Light|inspector"`, `"library|shortcuts"`.

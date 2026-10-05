@@ -13,6 +13,7 @@ import AppKit
 ///     -MotiffInspector YES       on a Canvas, opens the inspector
 ///     -MotiffDetail YES          on a Canvas, opens the selected node full size
 ///     -MotiffPaste <text>        on a Canvas, pastes the text onto the selected Idea
+///     -MotiffFilter <category>   on a Canvas, filters the legend to that category
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
@@ -31,6 +32,10 @@ enum DebugLaunchRoute {
 
     static var showsInspector: Bool {
         UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var filterName: String? {
+        UserDefaults.standard.string(forKey: "MotiffFilter")
     }
 
     static var pasteText: String? {

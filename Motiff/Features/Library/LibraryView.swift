@@ -10,6 +10,8 @@ struct LibraryView: View {
 
     @State private var availableWidth: CGFloat = 0
     @State private var pendingDelete: Reference?
+    /// Show only prompts with this purpose; nil shows everything.
+    @State private var purposeFilter: PromptPurpose?
     @State private var isDropTargeted = false
     @State private var isImporting = false
     /// Just saved, waiting for a Why.
@@ -20,8 +22,11 @@ struct LibraryView: View {
             content
                 .navigationTitle("Library")
                 #if os(macOS)
-                .navigationSubtitle(references.count == 1 ? "1 reference" : "\(references.count) references")
-                .toolbar { densityControls }
+                .navigationSubtitle(subtitle)
+                .toolbar {
+                    purposeMenu
+                    densityControls
+                }
                 #endif
                 .navigationDestination(for: Reference.self) { reference in
                     ReferenceDetailView(reference: reference)
@@ -70,12 +75,14 @@ struct LibraryView: View {
 
     @ViewBuilder
     private var content: some View {
-        if references.isEmpty {
+        if shown.isEmpty, purposeFilter != nil {
+            EmptyState(title: "Library", message: "No \(purposeFilter?.label.lowercased() ?? "") prompts yet.")
+        } else if shown.isEmpty {
             EmptyState(title: "Library", message: "Everything you keep.")
         } else {
             ScrollView {
                 MasonryGrid(
-                    items: references,
+                    items: shown,
                     columns: columnCount,
                     spacing: Theme.gridGap,
                     aspectRatio: \.displayAspectRatio
@@ -106,6 +113,17 @@ struct LibraryView: View {
                 Text(deleteMessage(for: reference))
             }
         }
+    }
+
+    private var shown: [Reference] {
+        guard let purposeFilter else { return references }
+        return references.filter { $0.purpose == purposeFilter }
+    }
+
+    private var subtitle: String {
+        let count = shown.count == 1 ? "1 reference" : "\(shown.count) references"
+        guard let purposeFilter else { return count }
+        return "\(count) · \(purposeFilter.label) prompts"
     }
 
     private var gridWidth: CGFloat {
@@ -141,6 +159,22 @@ struct LibraryView: View {
     }
 
     #if os(macOS)
+    /// All, or only Image / Text / Code / Other prompts.
+    @ToolbarContentBuilder
+    private var purposeMenu: some ToolbarContent {
+        ToolbarItem {
+            Picker("Purpose", selection: $purposeFilter) {
+                Text("All").tag(PromptPurpose?.none)
+                Divider()
+                ForEach(PromptPurpose.allCases, id: \.self) { purpose in
+                    Label(purpose.label, systemImage: purpose.systemImage).tag(Optional(purpose))
+                }
+            }
+            .pickerStyle(.menu)
+            .help("Show only prompts for one purpose")
+        }
+    }
+
     @ToolbarContentBuilder
     private var densityControls: some ToolbarContent {
         ToolbarItemGroup {

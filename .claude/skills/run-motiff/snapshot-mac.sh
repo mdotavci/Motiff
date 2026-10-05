@@ -3,7 +3,7 @@
 #
 #   snapshot-mac.sh <path/to/Motiff.app> <out-dir> <route>...
 #   route: library | inbox | boards | canvas:<title>, then optional |-separated extras:
-#          select=<node title, or its start>  inspector  detail  paste=<text>  shortcuts
+#          select=<node title, or its start>  inspector  detail  paste=<text>  filter=<category>  shortcuts
 #   e.g.   "canvas:Product photography look|select=Light|inspector"
 #
 # The app draws its own window into Snapshots/<name>.png (-MotiffSnapshot), so this needs no
@@ -36,6 +36,7 @@ for route in "$@"; do
       inspector) args+=(-MotiffInspector YES) ;;
       detail) args+=(-MotiffDetail YES) ;;
       paste=*) args+=(-MotiffPaste "${extra#paste=}") ;;
+      filter=*) args+=(-MotiffFilter "${extra#filter=}") ;;
       shortcuts) args+=(-MotiffShortcuts YES) ;;
       *) echo "Unknown extra: $extra" >&2 ;;
     esac

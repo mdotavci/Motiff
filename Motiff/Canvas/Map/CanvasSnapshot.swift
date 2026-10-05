@@ -11,6 +11,9 @@ struct CanvasSnapshot: Equatable, Sendable {
         let rect: CGRect
         let colorHex: String?
         let title: String
+        /// For filtering by category and by prompt purpose.
+        var categoryID: UUID? = nil
+        var purpose: PromptPurpose? = nil
 
         var center: CGPoint { CGPoint(x: rect.midX, y: rect.midY) }
 
@@ -73,7 +76,9 @@ struct CanvasSnapshot: Equatable, Sendable {
                 kind: node.kind,
                 rect: CGRect(x: node.x - size.width / 2, y: node.y - size.height / 2, width: size.width, height: size.height),
                 colorHex: node.category?.colorHex,
-                title: node.displayTitle
+                title: node.displayTitle,
+                categoryID: node.category?.id,
+                purpose: node.reference?.purpose
             ))
             if let parent = node.parent, !parent.isDeleted {
                 edges.append(Edge(id: "parent-\(node.id)", from: parent.id, to: node.id, type: .belongsTo, label: node.parentLabel))
@@ -96,7 +101,9 @@ struct CanvasSnapshot: Equatable, Sendable {
                 kind: node.kind,
                 rect: node.rect.offsetBy(dx: offset.width, dy: offset.height),
                 colorHex: node.colorHex,
-                title: node.title
+                title: node.title,
+                categoryID: node.categoryID,
+                purpose: node.purpose
             )
         }
         return CanvasSnapshot(nodes: moved, edges: edges)
@@ -132,6 +139,16 @@ struct CanvasSnapshot: Equatable, Sendable {
             }
         }
         return best?.edge
+    }
+
+    /// Nodes in any of `categories` (all, if empty) whose prompt purpose is any of `purposes`
+    /// (all, if empty). Nil when neither filter is on.
+    func matching(categories: Set<UUID>, purposes: Set<PromptPurpose>) -> Set<UUID>? {
+        guard !categories.isEmpty || !purposes.isEmpty else { return nil }
+        return Set(nodes.filter { node in
+            (categories.isEmpty || node.categoryID.map { categories.contains($0) } == true)
+                && (purposes.isEmpty || node.purpose.map { purposes.contains($0) } == true)
+        }.map(\.id))
     }
 
     /// The given nodes and everything one line away from them.

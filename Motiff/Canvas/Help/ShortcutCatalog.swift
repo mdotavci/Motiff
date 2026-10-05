@@ -110,6 +110,14 @@ enum ShortcutCatalog {
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
 
+    // MARK: Canvas: categories
+
+    static let assignCategory = Shortcut("Give the Selection a Category", pointer: "1 to 9, in legend order")
+    static let noCategory = Shortcut("No Category", "0")
+    static let filterCategory = Shortcut("Show Only a Category or Purpose", pointer: "Click it in the legend")
+    static let filterMore = Shortcut("Show More Than One", pointer: "⇧-click in the legend")
+    static let clearFilter = Shortcut("Show Everything Again", .escape)
+
     // MARK: Canvas: full size
 
     static let openDetail = Shortcut("Open Full Size", .space)
@@ -136,6 +144,9 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
+        ]),
+        ShortcutSection(title: "Canvas categories", items: [
+            assignCategory, noCategory, filterCategory, filterMore, clearFilter,
         ]),
         ShortcutSection(title: "Canvas full size", items: [
             openDetail, openByDoubleClick, closeDetail, previousSibling, nextSibling, copyPrompt,

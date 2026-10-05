@@ -45,7 +45,7 @@ struct CanvasMapView: View {
                 snapshot: shown,
                 camera: camera,
                 hoveredEdgeID: controller.hoveredEdgeID,
-                focus: highlighted == nil ? nil : controller.selection
+                focus: controller.edgeFocus
             )
 
             ForEach(controller.visibleNodes(in: shown)) { geometry in
@@ -108,13 +108,16 @@ struct CanvasMapView: View {
         .focused($mapFocused)
         .focusEffectDisabled()
         .onKeyPress(
-            keys: [.tab, .return, .delete, .deleteForward, .escape, .space, .leftArrow, .rightArrow, "l"],
+            keys: [
+                .tab, .return, .delete, .deleteForward, .escape, .space, .leftArrow, .rightArrow, "l",
+                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            ],
             phases: [.down, .repeat]
         ) { press in
             handleKey(press)
         }
         .overlay(alignment: .topLeading) {
-            CategoryLegendBar(canvas: canvas)
+            CategoryLegend(controller: controller)
                 .padding(Theme.gutter)
         }
         .overlay(alignment: .bottomTrailing) {
@@ -344,6 +347,10 @@ struct CanvasMapView: View {
         }
         let command = press.modifiers.contains(.command)
         let plain = press.modifiers.isDisjoint(with: [.command, .shift, .option, .control])
+        if plain, let number = press.key.character.wholeNumberValue {
+            controller.assignCategory(number: number)
+            return .handled
+        }
         switch press.key {
         case .tab where plain:
             controller.addNote()
@@ -360,6 +367,8 @@ struct CanvasMapView: View {
         case .escape:
             if controller.linkMode {
                 controller.toggleLinkMode()
+            } else if controller.selection.isEmpty, controller.isFiltering {
+                controller.clearFilters()
             } else {
                 controller.clearSelection()
             }
@@ -465,31 +474,6 @@ private struct SelectionRing: View {
             }
         }
         .allowsHitTesting(false)
-    }
-}
-
-/// The Canvas's categories with how many nodes each has. Filtering arrives with step 7.
-private struct CategoryLegendBar: View {
-    let canvas: Canvas
-
-    var body: some View {
-        let categories = canvas.sortedCategories
-        if !categories.isEmpty {
-            HStack(spacing: Theme.unit * 1.5) {
-                ForEach(categories) { category in
-                    HStack(spacing: 6) {
-                        Circle().fill(category.color).frame(width: 9, height: 9)
-                        Text(category.name)
-                        Text("\(category.nodes.count)").foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .font(.system(size: 12))
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background(Theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.cardBorder, lineWidth: 1))
-        }
     }
 }
 

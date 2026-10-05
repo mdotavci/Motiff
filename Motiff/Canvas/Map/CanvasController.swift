@@ -64,6 +64,11 @@ final class CanvasController {
         }
     }
 
+    /// Legend filters: only nodes in these categories, and with these prompt purposes, stay at
+    /// full strength. Empty means no filter. Filters dim; they never hide.
+    private(set) var categoryFilter: Set<UUID> = []
+    private(set) var purposeFilter: Set<PromptPurpose> = []
+
     /// The node under something being dragged in from outside; dropping attaches to its Idea.
     private(set) var dropTargetID: UUID?
 
@@ -102,6 +107,7 @@ final class CanvasController {
         }
         #if DEBUG
         applyLaunchSelection()
+        applyLaunchFilter()
         #endif
     }
 
@@ -117,6 +123,8 @@ final class CanvasController {
         let live = selection.filter { nodesByID[$0] != nil }
         if live != selection { selection = live }
         if let editingID, nodesByID[editingID] == nil { self.editingID = nil }
+        let liveCategories = categoryFilter.intersection(canvas.categories.map(\.id))
+        if liveCategories != categoryFilter { categoryFilter = liveCategories }
         let livePath = detailPath.filter { item in
             guard case let .node(id) = item else { return true }
             return nodesByID[id] != nil
@@ -272,8 +280,80 @@ final class CanvasController {
     }
 
     /// While something is selected: it and everything one line away. Nil means nothing is dimmed.
+    /// Nodes at full strength: the selection and its neighbors, and what the legend filters
+    /// let through; both, when both are on. Nil means nothing is dimmed.
     var highlighted: Set<UUID>? {
-        selection.isEmpty ? nil : snapshot.neighbors(of: selection)
+        let near = selection.isEmpty ? nil : snapshot.neighbors(of: selection)
+        let matches = snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+        switch (near, matches) {
+        case let (near?, matches?): return near.intersection(matches)
+        case let (near?, nil): return near
+        case let (nil, matches?): return matches
+        case (nil, nil): return nil
+        }
+    }
+
+    /// Lines touching these stay at full strength: the selection, else what the filters match.
+    var edgeFocus: Set<UUID>? {
+        if !selection.isEmpty { return selection }
+        return snapshot.matching(categories: categoryFilter, purposes: purposeFilter)
+    }
+
+    var isFiltering: Bool { !categoryFilter.isEmpty || !purposeFilter.isEmpty }
+
+    // MARK: Categories
+
+    /// Click a legend chip to show only that category; again to show all. ⇧-click adds or removes.
+    func toggleCategoryFilter(_ id: UUID, extending: Bool) {
+        categoryFilter = Self.toggled(id, in: categoryFilter, extending: extending)
+    }
+
+    func togglePurposeFilter(_ purpose: PromptPurpose, extending: Bool) {
+        purposeFilter = Self.toggled(purpose, in: purposeFilter, extending: extending)
+    }
+
+    func clearFilters() {
+        categoryFilter = []
+        purposeFilter = []
+    }
+
+    private static func toggled<T: Hashable>(_ item: T, in set: Set<T>, extending: Bool) -> Set<T> {
+        if extending {
+            var result = set
+            if result.contains(item) { result.remove(item) } else { result.insert(item) }
+            return result
+        }
+        return set == [item] ? [] : [item]
+    }
+
+    /// 1–9: the nth category in the legend for everything selected; 0: no category.
+    func assignCategory(number: Int) {
+        let nodes = selectedNodes
+        guard !nodes.isEmpty else { return }
+        let categories = canvas.sortedCategories
+        let category: CanvasCategory?
+        if number == 0 {
+            category = nil
+        } else if categories.indices.contains(number - 1) {
+            category = categories[number - 1]
+        } else {
+            Self.refuse()
+            return
+        }
+        update { CanvasGraph.setCategory(nodes, to: category) }
+    }
+
+    func addCategory() -> CanvasCategory? {
+        guard let context else { return nil }
+        var made: CanvasCategory?
+        update { made = CanvasGraph.addCategory(to: canvas, in: context) }
+        return made
+    }
+
+    func deleteCategory(_ category: CanvasCategory) {
+        guard let context else { return }
+        categoryFilter.remove(category.id)
+        update { CanvasGraph.deleteCategory(category, in: context) }
     }
 
     // MARK: Selection
@@ -705,6 +785,14 @@ final class CanvasController {
     }
 
     #if DEBUG
+    /// `-MotiffFilter <category name>` turns that legend filter on.
+    private func applyLaunchFilter() {
+        guard let name = DebugLaunchRoute.filterName,
+              let category = canvas.categories.first(where: { $0.name == name })
+        else { return }
+        categoryFilter = [category.id]
+    }
+
     private static var didApplyLaunchPaste = false
 
     /// `-MotiffPaste <text>` pastes that text onto the selected Idea once, as ⌘V would.

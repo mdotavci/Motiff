@@ -286,6 +286,63 @@ enum CanvasGraph {
         a.outgoing.first { $0.to === b } ?? a.incoming.first { $0.from === b }
     }
 
+    // MARK: Categories
+
+    /// A new category at the end of the legend, in the first swatch no other category uses.
+    @discardableResult
+    static func addCategory(to canvas: Canvas, name: String = "New category", in context: ModelContext) -> CanvasCategory {
+        let used = Set(canvas.categories.map(\.colorHex))
+        let swatch = CanvasCategory.swatches.first { !used.contains($0.hex) } ?? CanvasCategory.swatches[canvas.categories.count % CanvasCategory.swatches.count]
+        let category = CanvasCategory(name: name, colorHex: swatch.hex, order: (canvas.categories.map(\.order).max() ?? -1) + 1)
+        context.insert(category)
+        category.canvas = canvas
+        touch(canvas)
+        return category
+    }
+
+    /// Deletes a category. Its nodes keep everything else and lose only the color.
+    static func deleteCategory(_ category: CanvasCategory, in context: ModelContext) {
+        let canvas = category.canvas
+        for node in category.nodes { node.category = nil }
+        context.delete(category)
+        if let canvas {
+            renumber(canvas.sortedCategories.filter { $0 !== category })
+        }
+        touch(canvas)
+    }
+
+    /// Moves a category one place up (-1) or down (+1) in the legend.
+    static func moveCategory(_ category: CanvasCategory, by step: Int) {
+        guard let canvas = category.canvas else { return }
+        var ordered = canvas.sortedCategories
+        guard let index = ordered.firstIndex(where: { $0 === category }) else { return }
+        let target = index + step
+        guard ordered.indices.contains(target) else { return }
+        ordered.swapAt(index, target)
+        renumber(ordered)
+        touch(canvas)
+    }
+
+    static func renameCategory(_ category: CanvasCategory, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        category.name = trimmed
+        touch(category.canvas)
+    }
+
+    /// Only the curated swatches are allowed, so no category lands on focus red.
+    static func setColor(_ category: CanvasCategory, to hex: String) {
+        guard CanvasCategory.swatches.contains(where: { $0.hex == hex }) else { return }
+        category.colorHex = hex
+        touch(category.canvas)
+    }
+
+    private static func renumber(_ categories: [CanvasCategory]) {
+        for (index, category) in categories.enumerated() where category.order != index {
+            category.order = index
+        }
+    }
+
     // MARK: Changing a line
 
     /// Turns `child`'s belongs-to line into a relates-to link from its parent, keeping the label.
