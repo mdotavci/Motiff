@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A node full size over the Map: a Reference or Prompt in the shared Reference detail, an Idea
 /// with its description and everything attached to it. Esc goes back, ← → step through the
@@ -91,49 +92,42 @@ private struct DetailHeader: View {
     }
 }
 
-// MARK: - Ideas, notes and links
+// MARK: - Ideas, notes, text and links
 
-/// An Idea's title and description, what it's in, and everything attached to it as a grid.
-/// Notes and Links get the same page, with their text or URL.
+/// An Idea, Note, Text or Link full size, with everything editable in place: its title, its
+/// text in a markdown editor with a formatting bar, its category and color, a Link's address,
+/// a Text's size. Under it, everything attached to it as a grid, with + tiles to add more.
 private struct IdeaDetailView: View {
     let node: CanvasNode
     let controller: CanvasController
 
+    @State private var isImporting = false
+    @State private var showsLibrary = false
+    @State private var showsColors = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.unit * 3) {
-                VStack(alignment: .leading, spacing: Theme.unit) {
-                    HStack(spacing: 6) {
-                        if let category = node.category {
-                            Circle().fill(category.color).frame(width: 10, height: 10)
-                            Text("\(node.kind.label) · \(category.name)").motiffLabel()
-                        } else {
-                            Text(node.kind.label).motiffLabel()
+                VStack(alignment: .leading, spacing: Theme.unit * 1.5) {
+                    look
+                    if node.kind == .idea || node.kind == .link {
+                        TitleField(
+                            prompt: node.kind == .idea ? "Name this idea" : "Title",
+                            value: node.title ?? ""
+                        ) { text in
+                            if node.kind == .idea {
+                                controller.update { CanvasGraph.rename(node, to: text) }
+                            } else {
+                                controller.update { CanvasGraph.edit(node) { $0.title = text.isEmpty ? nil : text } }
+                            }
                         }
                     }
-                    Text(node.displayTitle)
-                        .font(.system(size: 28, weight: .semibold))
-                        .textSelection(.enabled)
                 }
 
                 text
 
-                let children = node.sortedChildren
-                if !children.isEmpty {
-                    DetailSection("Attached · \(children.count)") {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: Theme.unit * 1.5)],
-                            alignment: .leading,
-                            spacing: Theme.unit * 1.5
-                        ) {
-                            ForEach(children) { child in
-                                Button { controller.openDetail(child.id) } label: {
-                                    AttachedTile(node: child)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
+                if node.kind == .idea {
+                    attached
                 }
 
                 ConnectionList(node: node) { other in
@@ -144,40 +138,209 @@ private struct IdeaDetailView: View {
             .frame(maxWidth: 960, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+            guard case let .success(urls) = result else { return }
+            let id = node.id
+            Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: nil, onto: id) }
+        }
+        .sheet(isPresented: $showsLibrary) {
+            LibraryDrawer { reference in
+                controller.place(references: [reference.id], onto: node.id)
+            } close: {
+                showsLibrary = false
+            }
+            .frame(minWidth: 320, minHeight: 480)
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// Kind, category and color in one row: what it is and how it looks.
+    private var look: some View {
+        HStack(spacing: Theme.unit) {
+            Text(node.kind.label).motiffLabel()
+            Menu {
+                ForEach(controller.canvas.sortedCategories) { category in
+                    Button {
+                        controller.update { CanvasGraph.setCategory([node], to: category) }
+                    } label: {
+                        if node.category === category {
+                            Label(category.name, systemImage: "checkmark")
+                        } else {
+                            Text(category.name)
+                        }
+                    }
+                }
+                Divider()
+                Button("No Category") {
+                    controller.update { CanvasGraph.setCategory([node], to: nil) }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(node.category?.color ?? Color.primary.opacity(0.15))
+                        .frame(width: 9, height: 9)
+                    Text(node.category?.name ?? "No category")
+                }
+                .font(.callout)
+            }
+            .menuIndicator(.visible)
+            .fixedSize()
+            .help("Category")
+
+            Button {
+                showsColors = true
+            } label: {
+                Group {
+                    if let hex = node.kind == .text ? node.textColorHex : node.effectiveColorHex {
+                        SwatchDot(hex: hex, size: 16)
+                    } else {
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                            .frame(width: 16, height: 16)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Color (\(ShortcutCatalog.color.keys) on the Map)")
+            .popover(isPresented: $showsColors, arrowEdge: .bottom) {
+                ColorPalettePicker(
+                    current: node.kind == .text ? node.textColorHex : node.colorHex,
+                    resetTitle: node.kind == .text ? "Automatic" : "Category Color"
+                ) { hex in
+                    controller.select(node.id)
+                    controller.setColor(hex)
+                }
+                .padding(12)
+                .frame(width: 280)
+            }
+
+            if node.kind == .text {
+                TextSizePicker(controller: controller, node: node)
+                    .frame(width: 260)
+            }
+        }
     }
 
     @ViewBuilder
     private var text: some View {
         switch node.kind {
         case .idea:
-            if let description = node.body, !description.isEmpty {
-                Text(Self.markdown(description))
-                    .font(.body)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: 640, alignment: .leading)
-            } else {
-                Text("No description yet. Add one in the inspector (\(ShortcutCatalog.inspector.keys)).")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            MarkdownEditor(value: node.body ?? "", prompt: "What this idea is about: notes, links, a plan…") { text in
+                controller.update { CanvasGraph.edit(node) { $0.body = text.isEmpty ? nil : text } }
             }
+            .frame(maxWidth: 720)
         case .note, .text:
-            Text(Self.markdown(node.body ?? ""))
-                .font(.title3)
-                .textSelection(.enabled)
-                .frame(maxWidth: 640, alignment: .leading)
+            MarkdownEditor(
+                value: node.body ?? "",
+                prompt: node.kind == .note ? "Write the note…" : "Write the text…",
+                minHeight: 260,
+                font: node.kind == .note ? .title3 : .body
+            ) { text in
+                controller.update { CanvasGraph.edit(node) { $0.body = text } }
+            }
+            .frame(maxWidth: 720)
         case .link:
-            if let url = node.url {
-                Link(url.absoluteString, destination: url)
-                    .font(.callout)
+            VStack(alignment: .leading, spacing: Theme.unit) {
+                CommitField(prompt: "https://", value: node.urlString ?? "") { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    controller.update { CanvasGraph.edit(node) { $0.urlString = trimmed.isEmpty ? nil : trimmed } }
+                }
+                .frame(maxWidth: 520)
+                if let url = node.url {
+                    Link("Open \(url.host() ?? url.absoluteString)", destination: url)
+                        .font(.callout)
+                }
             }
         case .reference, .prompt:
             EmptyView()
         }
     }
 
-    static func markdown(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    /// Everything that belongs to the Idea, then tiles that add a Note, Text, Idea or images.
+    private var attached: some View {
+        let children = node.sortedChildren
+        return DetailSection(children.isEmpty ? "Attached" : "Attached · \(children.count)") {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: Theme.unit * 1.5)],
+                alignment: .leading,
+                spacing: Theme.unit * 1.5
+            ) {
+                ForEach(children) { child in
+                    Button { controller.openDetail(child.id) } label: {
+                        AttachedTile(node: child)
+                    }
+                    .buttonStyle(.plain)
+                }
+                AddTile(title: "Note", systemImage: "note.text") { add(.note) }
+                AddTile(title: "Text", systemImage: "textformat") { add(.text) }
+                AddTile(title: "Sub-Idea", systemImage: "circle") { add(.idea) }
+                AddTile(title: "Images", systemImage: "photo") { isImporting = true }
+                AddTile(title: "From Library", systemImage: "square.grid.2x2") { showsLibrary = true }
+            }
+        }
+    }
+
+    /// A new Note, Text or Idea on this Idea, opened full size to write in.
+    private func add(_ kind: NodeKind) {
+        controller.addChild(kind, to: node.id)
+    }
+}
+
+/// A big plain text field for a title. Saves on Return or when it loses focus.
+private struct TitleField: View {
+    let prompt: String
+    let value: String
+    let commit: (String) -> Void
+
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(prompt, text: $draft, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 28, weight: .semibold))
+            .focused($focused)
+            .onAppear { draft = value }
+            .onChange(of: value) { _, newValue in
+                if !focused { draft = newValue }
+            }
+            .onSubmit(save)
+            .onChange(of: focused) { wasFocused, isFocused in
+                if wasFocused, !isFocused { save() }
+            }
+            .onDisappear(perform: save)
+    }
+
+    private func save() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != value { commit(trimmed) }
+    }
+}
+
+/// A dashed tile in the Attached grid that adds something.
+private struct AddTile: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .semibold))
+                Label(title, systemImage: systemImage)
+                    .font(.callout)
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.cardCorner)
+                    .strokeBorder(Color.primary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
+        }
+        .buttonStyle(.plain)
+        .help("Add \(title)")
     }
 }
 

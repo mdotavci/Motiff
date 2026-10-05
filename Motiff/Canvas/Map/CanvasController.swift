@@ -557,6 +557,16 @@ final class CanvasController {
         finishAdding(node)
     }
 
+    /// From a detail page: a new Note, Text or Idea on that node, opened full size to write in.
+    func addChild(_ kind: NodeKind, to parentID: UUID) {
+        guard let context, let parent = node(parentID),
+              let child = CanvasGraph.addChild(kind, under: parent, body: kind == .idea ? nil : "", in: context)
+        else { return }
+        save()
+        reload()
+        openDetail(child.id)
+    }
+
     /// Selects the new node and starts typing into it. A Note or Text left empty isn't kept.
     private func finishAdding(_ node: CanvasNode) {
         save()

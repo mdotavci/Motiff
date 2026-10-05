@@ -110,8 +110,8 @@ extension EnvironmentValues {
     }
 }
 
-/// The text side of the detail view: Recipe, Read, Why, Source, Lineage, Boards.
-/// Sections with nothing in them are left out.
+/// The text side of the detail view: Prompt, Notes, Why, Purpose and Source, all editable in
+/// place (⌘Z undoes); then Read, Lineage, Boards and Canvases, which are worked out.
 struct ReferenceInfo: View {
     let reference: Reference
 
@@ -119,19 +119,17 @@ struct ReferenceInfo: View {
         VStack(alignment: .leading, spacing: Theme.unit * 3) {
             header
 
-            if !reference.recipe.isEmpty || reference.copyablePrompt != nil {
-                DetailSection("Recipe") { RecipeCard(reference: reference) }
-            }
+            DetailSection(reference.recipe.isEmpty ? "Prompt" : "Recipe") { RecipeCard(reference: reference) }
+
+            DetailSection("Notes") { notes }
+
+            DetailSection("Why") { WhyEditor(reference: reference) }
+
+            DetailSection("Purpose") { purposePicker }
+
+            DetailSection("Source") { SourceCard(reference: reference) }
 
             DetailSection("Read") { ReadCard(reference: reference) }
-
-            if !reference.why.isEmpty || !(reference.whyNote ?? "").isEmpty {
-                DetailSection("Why") { WhyCard(reference: reference) }
-            }
-
-            if hasSource {
-                DetailSection("Source") { SourceCard(reference: reference) }
-            }
 
             if reference.parent != nil || !reference.children.isEmpty {
                 DetailSection("Lineage") { LineageCard(reference: reference) }
@@ -155,6 +153,31 @@ struct ReferenceInfo: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var notes: some View {
+        MarkdownEditor(value: reference.notes ?? "", prompt: "Your notes on it: what to take from it, where to use it…", minHeight: 140) { text in
+            reference.edit { $0.notes = text.isEmpty ? nil : text }
+        }
+    }
+
+    private var purposePicker: some View {
+        Picker("Purpose", selection: purpose) {
+            Text("None").tag(PromptPurpose?.none)
+            ForEach(PromptPurpose.allCases, id: \.self) { purpose in
+                Label(purpose.label, systemImage: purpose.systemImage).tag(PromptPurpose?.some(purpose))
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
+    }
+
+    private var purpose: Binding<PromptPurpose?> {
+        Binding {
+            reference.purpose
+        } set: { purpose in
+            reference.edit { $0.purpose = purpose }
+        }
+    }
+
     private var header: some View {
         HStack(spacing: Theme.unit) {
             OriginBadge(origin: reference.origin)
@@ -162,11 +185,6 @@ struct ReferenceInfo: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var hasSource: Bool {
-        [reference.sourcePlatform, reference.sourceURL, reference.creator]
-            .contains { !($0 ?? "").isEmpty }
     }
 }
 
@@ -246,9 +264,7 @@ private struct RecipeCard: View {
             ForEach(reference.recipe) { part in
                 KeyValueRow(key: part.kind.label, value: part.text)
             }
-            if let prompt = reference.copyablePrompt {
-                PromptBlock(prompt: prompt)
-            }
+            PromptEditor(reference: reference)
             if let model = reference.model, !model.isEmpty {
                 KeyValueRow(key: "Model", value: model)
             }
@@ -349,31 +365,84 @@ private struct PaletteRow: View {
     }
 }
 
-private struct WhyCard: View {
+/// The Why chips to tap on and off, and the one-line Why note.
+private struct WhyEditor: View {
     let reference: Reference
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.unit) {
-            if !reference.why.isEmpty {
-                HStack(spacing: Theme.unit / 2) {
-                    ForEach(reference.why, id: \.self) { chip in
-                        Text(chip.label)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, Theme.unit)
-                            .padding(.vertical, 4)
-                            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.3)))
+            WhyChipToggles(selected: reference.why) { chip in
+                reference.edit { reference in
+                    if reference.why.contains(chip) {
+                        reference.why.removeAll { $0 == chip }
+                    } else {
+                        reference.why.append(chip)
                     }
                 }
             }
-            if let note = reference.whyNote, !note.isEmpty {
-                Text("“\(note)”")
-                    .font(.body)
-                    .textSelection(.enabled)
+            CommitField(prompt: "Why I kept it", value: reference.whyNote ?? "") { text in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                reference.edit { $0.whyNote = trimmed.isEmpty ? nil : trimmed }
             }
         }
     }
 }
 
+/// The prompt as text you can change, in mono, with Copy. Saved a moment after typing stops
+/// and when it loses focus; ⌘Z undoes.
+private struct PromptEditor: View {
+    let reference: Reference
+
+    @State private var draft = ""
+    @State private var copied = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.unit) {
+            TextField("Write or paste the prompt", text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.callout.monospaced())
+                .lineLimit(3...20)
+                .focused($focused)
+                .onAppear { draft = reference.copyablePrompt ?? "" }
+                .onChange(of: reference.copyablePrompt) { _, prompt in
+                    if !focused { draft = prompt ?? "" }
+                }
+                .onChange(of: focused) { wasFocused, isFocused in
+                    if wasFocused, !isFocused { save() }
+                }
+                .onDisappear(perform: save)
+            HStack {
+                Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                    save()
+                    Pasteboard.copy(draft)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copied = false
+                    }
+                }
+                .disabled(draft.isEmpty)
+                Spacer()
+                if focused {
+                    Button("Done") { focused = false }
+                }
+            }
+            .font(.caption)
+            .buttonStyle(.borderless)
+        }
+        .padding(Theme.unit * 1.5)
+        .background(Color.primary.opacity(0.05))
+    }
+
+    private func save() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text != (reference.copyablePrompt ?? "") else { return }
+        reference.edit { $0.promptRaw = text.isEmpty ? nil : text }
+    }
+}
+
+/// Where it came from: the address and who made it, both editable, and a link to open it.
 private struct SourceCard: View {
     let reference: Reference
 
@@ -382,20 +451,17 @@ private struct SourceCard: View {
             if let platform = reference.sourcePlatform, !platform.isEmpty {
                 KeyValueRow(key: "From", value: platform)
             }
-            if let creator = reference.creator, !creator.isEmpty {
-                KeyValueRow(key: "Creator", value: creator)
+            CommitField(prompt: "Link (https://…)", value: reference.sourceURL ?? "") { text in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                reference.edit { $0.sourceURL = trimmed.isEmpty ? nil : trimmed }
             }
-            if let string = reference.sourceURL, let url = URL(string: string) {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.unit) {
-                    Text("Link")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 88, alignment: .leading)
-                    Link(string, destination: url)
-                        .font(.callout)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+            CommitField(prompt: "Creator", value: reference.creator ?? "") { text in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                reference.edit { $0.creator = trimmed.isEmpty ? nil : trimmed }
+            }
+            if let string = reference.sourceURL, let url = URL(string: string), url.scheme != nil {
+                Link("Open \(url.host() ?? string)", destination: url)
+                    .font(.callout)
             }
         }
     }

@@ -161,6 +161,11 @@ enum ShortcutCatalog {
     static let previousSibling = Shortcut("Previous at the Same Level", .leftArrow)
     static let nextSibling = Shortcut("Next at the Same Level", .rightArrow)
     static let copyPrompt = Shortcut("Copy Prompt", "c", [.command, .shift])
+    static let editTitle = Shortcut("Edit the Title or Text", pointer: "Click it and type")
+    static let bold = Shortcut("Bold", "b", .command)
+    static let italic = Shortcut("Italic", "i", .command)
+    static let insertLink = Shortcut("Insert a Link", "k", [.command, .shift])
+    static let detailAdd = Shortcut("Add a Note, Text, Idea or Image to It", pointer: "The + tiles under Attached")
 
     // MARK: Boards
 
@@ -233,6 +238,7 @@ enum ShortcutCatalog {
         ]),
         ShortcutSection(title: "Canvas full size", items: [
             openDetail, openByDoubleClick, closeDetail, previousSibling, nextSibling, copyPrompt,
+            editTitle, bold, italic, insertLink, detailAdd,
         ]),
         ShortcutSection(title: "Canvas connections", items: [
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,

@@ -40,6 +40,8 @@ final class Reference {
 
     var whyChipsRaw: [String] = []
     var whyNote: String?
+    /// Your own notes on it, in markdown, as long as you like.
+    var notes: String?
 
     // MARK: Read (on-device + AI)
 
@@ -183,6 +185,15 @@ extension Reference {
             return CanvasNode.firstLine(prompt)
         }
         return ([origin.label] + why.prefix(1).map(\.label)).joined(separator: " · ")
+    }
+
+    /// Changes it in place (the detail page's fields), saves, and tells the Canvases it's on so
+    /// their cards redraw. One Undo step.
+    @MainActor
+    func edit(_ change: (Reference) -> Void) {
+        change(self)
+        for node in canvasNodes { CanvasGraph.touch(node.canvas) }
+        try? modelContext?.save()
     }
 
     /// Number of Canvases this Reference or any of its Remixes is on.
