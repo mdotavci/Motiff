@@ -95,8 +95,9 @@ enum CanvasLayout {
         let longest = lines.map(\.count).max() ?? 0
         // Big letters wrap later, so a heading isn't a word per line.
         let maxWidth = textMaxWidth * max(1, font / 20)
-        let width = min(maxWidth, max(font * 4, CGFloat(longest) * letter + padding * 2)).rounded()
-        let perLine = max(1, Int((width - padding * 2) / letter))
+        let width = min(maxWidth, max(font * 4, CGFloat(longest) * letter + padding * 2)).rounded(.up)
+        // A line as wide as its letters must fit them, whatever the rounding.
+        let perLine = max(1, Int((width - padding * 2) / letter + 0.01))
         let rows = lines.reduce(0) { $0 + max(1, Int((Double($1.count) / Double(perLine)).rounded(.up))) }
         return CGSize(width: width, height: (CGFloat(rows) * font * 1.3 + padding * 2).rounded())
     }
