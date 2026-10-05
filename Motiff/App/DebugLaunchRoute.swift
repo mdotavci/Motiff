@@ -11,6 +11,7 @@ import AppKit
 ///     -MotiffSnapshot <name>     writes Snapshots/<name>.png in the library folder (Mac)
 ///     -MotiffSelect <title>      on a Canvas, selects the node with that title
 ///     -MotiffInspector YES       on a Canvas, opens the inspector
+///     -MotiffDetail YES          on a Canvas, opens the selected node full size
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
@@ -29,6 +30,10 @@ enum DebugLaunchRoute {
 
     static var showsInspector: Bool {
         UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var showsDetail: Bool {
+        UserDefaults.standard.bool(forKey: "MotiffDetail")
     }
 
     static var showsShortcuts: Bool {

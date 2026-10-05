@@ -155,6 +155,8 @@ jobs:
             library \
             "canvas:Product photography look" \
             "canvas:Product photography look|select=Light|inspector" \
+            "canvas:Product photography look|select=Light|detail" \
+            "canvas:Product photography look|select=Write a three-line|detail" \
             "library|shortcuts"
 
       # Pushed to ci-snapshots/<branch> so agents can `git fetch` them; pushes made with

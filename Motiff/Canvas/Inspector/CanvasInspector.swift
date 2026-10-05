@@ -45,6 +45,10 @@ private struct NodeInspector: View {
                 Text(node.displayTitle)
                     .font(.headline)
                     .lineLimit(3)
+                Button("Open Full Size") { controller.openDetail(node.id) }
+                    .buttonStyle(.link)
+                    .font(.callout)
+                    .help("Open (\(ShortcutCatalog.openDetail.keys))")
             }
 
             text
@@ -57,7 +61,13 @@ private struct NodeInspector: View {
                 }
             }
 
-            Connections(node: node, controller: controller)
+            ConnectionList(node: node) { other in
+                controller.focus(on: other.id)
+            } detach: { child in
+                controller.detach(child)
+            } unlink: { link in
+                controller.unlink(link)
+            }
 
             if let reference = node.reference {
                 DetailSection("Purpose") {
@@ -146,95 +156,6 @@ private struct NodeInspector: View {
 }
 
 // MARK: - Building blocks
-
-/// What the node belongs to and what it's linked with. Click a row to go to that node;
-/// × detaches or unlinks.
-private struct Connections: View {
-    let node: CanvasNode
-    let controller: CanvasController
-
-    var body: some View {
-        if let parent = node.parent {
-            DetailSection("Belongs to") {
-                ConnectionRow(node: parent, label: node.parentLabel, removeTitle: "Detach") {
-                    controller.focus(on: parent.id)
-                } remove: {
-                    controller.detach(node)
-                }
-            }
-        }
-        let outgoing = node.outgoing.filter { $0.to != nil }
-        if !outgoing.isEmpty {
-            DetailSection("Linked to") {
-                ForEach(outgoing) { link in
-                    if let other = link.to {
-                        ConnectionRow(node: other, label: link.label, removeTitle: "Unlink") {
-                            controller.focus(on: other.id)
-                        } remove: {
-                            controller.unlink(link)
-                        }
-                    }
-                }
-            }
-        }
-        let incoming = node.incoming.filter { $0.from != nil }
-        if !incoming.isEmpty {
-            DetailSection("Linked from") {
-                ForEach(incoming) { link in
-                    if let other = link.from {
-                        ConnectionRow(node: other, label: link.label, removeTitle: "Unlink") {
-                            controller.focus(on: other.id)
-                        } remove: {
-                            controller.unlink(link)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct ConnectionRow: View {
-    let node: CanvasNode
-    let label: String?
-    let removeTitle: String
-    let open: () -> Void
-    let remove: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.unit) {
-            Button(action: open) {
-                HStack(spacing: Theme.unit) {
-                    Circle()
-                        .fill(node.category?.color ?? Color.primary.opacity(0.25))
-                        .frame(width: 8, height: 8)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(node.displayTitle)
-                            .lineLimit(1)
-                        if let label, !label.isEmpty {
-                            Text(label)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .font(.callout)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Go to \(node.kind.label)")
-            Button(removeTitle, systemImage: "xmark", action: remove)
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .help(removeTitle)
-        }
-        .padding(.vertical, 3)
-    }
-}
 
 /// The Canvas's categories as rows with their color, a check on the current one, and None.
 private struct CategoryPicker: View {

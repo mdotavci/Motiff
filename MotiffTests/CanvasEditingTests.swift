@@ -101,4 +101,18 @@ final class CanvasEditingTests: XCTestCase {
         XCTAssertEqual(try store.count(CanvasNode.self), 1)
         XCTAssertEqual(new.canvas.roots.count, 1)
     }
+
+    @MainActor
+    func testSiblingsAreTheNodesAtTheSameLevelInOrder() throws {
+        let store = try TestStore()
+        let new = CanvasGraph.makeCanvas(title: "", in: store.context)
+        let first = CanvasGraph.addNode(.note, to: new.canvas, parent: new.root, at: .zero, in: store.context)
+        let second = CanvasGraph.addNode(.idea, to: new.canvas, parent: new.root, at: .zero, in: store.context)
+        let loose = CanvasGraph.addNode(.note, to: new.canvas, at: .zero, in: store.context)
+        try store.context.save()
+
+        XCTAssertEqual(CanvasGraph.siblings(of: second).map(\.id), [first.id, second.id])
+        XCTAssertEqual(CanvasGraph.siblings(of: new.root).map(\.id), [new.root.id])
+        XCTAssertEqual(CanvasGraph.siblings(of: loose).map(\.id), [loose.id])
+    }
 }

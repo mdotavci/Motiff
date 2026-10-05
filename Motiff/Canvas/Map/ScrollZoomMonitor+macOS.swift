@@ -55,7 +55,8 @@ struct ScrollZoomMonitor: ViewModifier {
 
     @MainActor
     private static func handle(type: NSEvent.EventType, event: EventValues, controller: CanvasController) -> Bool {
-        guard let pointer = controller.pointer else { return false }
+        // Over an open detail, scrolling scrolls the detail.
+        guard !controller.isShowingDetail, let pointer = controller.pointer else { return false }
         switch type {
         case .magnify:
             controller.zoom(by: 1 + event.magnification, at: pointer)

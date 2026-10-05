@@ -330,6 +330,13 @@ enum CanvasGraph {
 
     // MARK: Order
 
+    /// The node and the others at its level, in order: what ← and → step through in the detail.
+    static func siblings(of node: CanvasNode) -> [CanvasNode] {
+        if let parent = node.parent { return parent.sortedChildren }
+        guard let canvas = node.canvas else { return [node] }
+        return node.isRoot ? canvas.roots : canvas.unattachedNodes
+    }
+
     /// One past the last sibling, so a new node goes to the end.
     static func nextSortIndex(under parent: CanvasNode?, in canvas: Canvas?) -> Double {
         let siblings = parent?.children ?? canvas?.nodes.filter { $0.parent == nil } ?? []

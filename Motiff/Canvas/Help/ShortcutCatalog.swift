@@ -103,6 +103,15 @@ enum ShortcutCatalog {
     static let moveAlone = Shortcut("Move Just the Idea", pointer: "⌥-drag")
     static let inspector = Shortcut("Show Inspector", "i", [.command, .option])
 
+    // MARK: Canvas: full size
+
+    static let openDetail = Shortcut("Open Full Size", .space)
+    static let openByDoubleClick = Shortcut("Open a Reference or Prompt", pointer: "Double-click it")
+    static let closeDetail = Shortcut("Back to the Canvas", .escape)
+    static let previousSibling = Shortcut("Previous at the Same Level", .leftArrow)
+    static let nextSibling = Shortcut("Next at the Same Level", .rightArrow)
+    static let copyPrompt = Shortcut("Copy Prompt", "c", [.command, .shift])
+
     // MARK: Canvas: connecting
 
     static let connect = Shortcut("Put a Node Under Another", pointer: "Drag its handle onto it")
@@ -119,6 +128,9 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas editing", items: [
             addNote, addSubIdea, edit, editByClick, finishEditing, cancelEditing, newLine,
             delete, deleteBranch, select, extendSelection, deselect, move, moveAlone, inspector,
+        ]),
+        ShortcutSection(title: "Canvas full size", items: [
+            openDetail, openByDoubleClick, closeDetail, previousSibling, nextSibling, copyPrompt,
         ]),
         ShortcutSection(title: "Canvas connections", items: [
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,

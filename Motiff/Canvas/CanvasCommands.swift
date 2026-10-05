@@ -25,6 +25,10 @@ struct CanvasEditActions {
     var toggleInspector: @MainActor () -> Void
     var linkMode: Bool
     var toggleLinkMode: @MainActor () -> Void
+    var canOpen: Bool
+    var open: @MainActor () -> Void
+    var canCopyPrompt: Bool
+    var copyPrompt: @MainActor () -> Void
 }
 
 extension FocusedValues {
@@ -37,7 +41,7 @@ extension FocusedValues {
 /// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app),
 /// the Canvas menu, and Help › Keyboard Shortcuts (⌘/).
 ///
-/// Tab, Return, L, ⌫ and Esc are handled by the Map itself, not here: as menu shortcuts they'd
+/// Tab, Return, Space, L, ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
 /// take those keys away from every text field. Their menu items show no key; the help sheet
 /// lists them.
 struct CanvasCommands: Commands {
@@ -59,6 +63,11 @@ struct CanvasCommands: Commands {
                 .shortcut(ShortcutCatalog.addSubIdea)
                 .disabled(editing == nil)
             Divider()
+            Button(ShortcutCatalog.openDetail.title) { editing?.open() }
+                .disabled(editing?.canOpen != true)
+            Button(ShortcutCatalog.copyPrompt.title) { editing?.copyPrompt() }
+                .shortcut(ShortcutCatalog.copyPrompt)
+                .disabled(editing?.canCopyPrompt != true)
             Button(ShortcutCatalog.edit.title) { editing?.edit() }
                 .disabled(editing?.hasSelection != true)
             Button("Delete") { editing?.delete() }

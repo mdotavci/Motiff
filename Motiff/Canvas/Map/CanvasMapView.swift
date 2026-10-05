@@ -92,7 +92,10 @@ struct CanvasMapView: View {
         .focusable()
         .focused($mapFocused)
         .focusEffectDisabled()
-        .onKeyPress(keys: [.tab, .return, .delete, .deleteForward, .escape, "l"], phases: [.down, .repeat]) { press in
+        .onKeyPress(
+            keys: [.tab, .return, .delete, .deleteForward, .escape, .space, .leftArrow, .rightArrow, "l"],
+            phases: [.down, .repeat]
+        ) { press in
             handleKey(press)
         }
         .overlay(alignment: .topLeading) {
@@ -122,6 +125,16 @@ struct CanvasMapView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("A word or two on the line. Leave it empty to remove the label.")
+        }
+        .overlay(alignment: .topLeading) {
+            // The open node grows out of its place on the Map and shrinks back into it.
+            ZStack {
+                if let item = controller.detailItem {
+                    CanvasDetailView(controller: controller, item: item)
+                        .transition(.hero(from: heroSource(for: item), in: size))
+                }
+            }
+            .animation(.snappy(duration: 0.32), value: controller.isShowingDetail)
         }
         .inspector(isPresented: Binding(get: { controller.showsInspector }, set: { controller.showsInspector = $0 })) {
             CanvasInspector(controller: controller)
@@ -167,7 +180,11 @@ struct CanvasMapView: View {
             deleteBranch: { controller.deleteSelection(branch: true) },
             toggleInspector: controller.toggleInspector,
             linkMode: controller.linkMode,
-            toggleLinkMode: controller.toggleLinkMode
+            toggleLinkMode: controller.toggleLinkMode,
+            canOpen: controller.selectedNode != nil && !controller.isShowingDetail,
+            open: { controller.openDetail() },
+            canCopyPrompt: controller.promptToCopy != nil,
+            copyPrompt: controller.copyPrompt
         ))
         .navigationTitle(canvas.displayTitle)
     }
@@ -257,6 +274,11 @@ struct CanvasMapView: View {
         }
     }
 
+    private func heroSource(for item: CanvasController.DetailItem) -> CGRect? {
+        guard case let .node(id) = item else { return nil }
+        return controller.screenRect(of: id)
+    }
+
     private var isLabeling: Binding<Bool> {
         Binding { labelingEdge != nil } set: { if !$0 { labelingEdge = nil } }
     }
@@ -285,6 +307,15 @@ struct CanvasMapView: View {
     /// Keys the Map handles itself. While a text field has the keyboard they're left to it.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
         guard controller.editingID == nil else { return .ignored }
+        if controller.isShowingDetail {
+            switch press.key {
+            case .escape, .space: controller.closeDetail()
+            case .leftArrow: controller.stepDetail(by: -1)
+            case .rightArrow: controller.stepDetail(by: 1)
+            default: return .ignored
+            }
+            return .handled
+        }
         let command = press.modifiers.contains(.command)
         let plain = press.modifiers.isDisjoint(with: [.command, .shift, .option, .control])
         switch press.key {
@@ -298,6 +329,8 @@ struct CanvasMapView: View {
             controller.deleteSelection(branch: command)
         case "l" where plain:
             controller.toggleLinkMode()
+        case .space where plain:
+            controller.openDetail()
         case .escape:
             if controller.linkMode {
                 controller.toggleLinkMode()

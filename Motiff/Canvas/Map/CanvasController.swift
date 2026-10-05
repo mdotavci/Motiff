@@ -47,6 +47,23 @@ final class CanvasController {
         var isLink: Bool
     }
 
+    /// What's open full size over the Map, last on top: nodes of this Canvas, or a Reference
+    /// reached from one (a Remix) that isn't on it. Esc goes back one; empty shows the Map.
+    private(set) var detailPath: [DetailItem] = []
+
+    enum DetailItem: Equatable {
+        case node(UUID)
+        case reference(Reference)
+
+        static func == (lhs: DetailItem, rhs: DetailItem) -> Bool {
+            switch (lhs, rhs) {
+            case let (.node(a), .node(b)): a == b
+            case let (.reference(a), .reference(b)): a === b
+            default: false
+            }
+        }
+    }
+
     /// L: click two nodes to link them. `linkSourceID` is the first one clicked.
     private(set) var linkMode = false
     private(set) var linkSourceID: UUID?
@@ -96,6 +113,11 @@ final class CanvasController {
         let live = selection.filter { nodesByID[$0] != nil }
         if live != selection { selection = live }
         if let editingID, nodesByID[editingID] == nil { self.editingID = nil }
+        let livePath = detailPath.filter { item in
+            guard case let .node(id) = item else { return true }
+            return nodesByID[id] != nil
+        }
+        if livePath != detailPath { detailPath = livePath }
         fitIfNeeded()
     }
 
@@ -222,8 +244,9 @@ final class CanvasController {
     static let hoverReach: CGFloat = 16
 
     func setPointer(_ point: CGPoint?) {
-        pointer = point
-        guard let point, viewSize.width > 0 else {
+        // Under a detail, the Map isn't being pointed at.
+        pointer = isShowingDetail ? nil : point
+        guard let point = pointer, viewSize.width > 0 else {
             hoveredNodeID = nil
             hoveredEdgeID = nil
             return
@@ -336,7 +359,7 @@ final class CanvasController {
     // MARK: Editing in place
 
     /// Return or double-click: type into an Idea's title, a Note's text or a Link's title.
-    /// References and Prompts are edited in the inspector, which this opens.
+    /// References and Prompts have no text of their own here: they open full size.
     func beginEditing(_ id: UUID? = nil) {
         guard let id = id ?? selectedNode?.id, let node = self.node(id), editingID != id else { return }
         endEditing()
@@ -346,8 +369,7 @@ final class CanvasController {
         case .note:
             editDraft = node.body ?? ""
         case .reference, .prompt:
-            selection = [id]
-            showsInspector = true
+            openDetail(id)
             return
         }
         selection = [id]
@@ -545,15 +567,90 @@ final class CanvasController {
         #endif
     }
 
+    // MARK: Detail
+
+    var detailItem: DetailItem? { detailPath.last }
+    var isShowingDetail: Bool { !detailPath.isEmpty }
+
+    /// Space or double-click: the node full size. From inside a detail, it goes on top.
+    func openDetail(_ id: UUID? = nil) {
+        guard let id = id ?? selectedNode?.id, node(id) != nil else { return }
+        endEditing()
+        if linkMode { toggleLinkMode() }
+        detailPath.append(.node(id))
+        selection = [id]
+    }
+
+    /// A Reference from inside a detail: its card on this Canvas if it has one.
+    func openDetail(reference: Reference) {
+        if let card = reference.canvasNodes.first(where: { $0.canvas === canvas && !$0.isDeleted }) {
+            openDetail(card.id)
+        } else {
+            detailPath.append(.reference(reference))
+        }
+    }
+
+    /// Esc: back one; out of the last one, the Map is where it was, with that node selected.
+    func closeDetail() {
+        guard let closing = detailPath.popLast() else { return }
+        if detailPath.isEmpty, case let .node(id) = closing {
+            selection = [id]
+            reveal(id)
+        }
+    }
+
+    /// ← / →: the previous or next node at the same level, in sibling order.
+    func stepDetail(by step: Int) {
+        guard let position = detailPosition else { return }
+        let next = position.index + step
+        guard position.siblings.indices.contains(next) else { return }
+        detailPath[detailPath.count - 1] = .node(position.siblings[next].id)
+        selection = [position.siblings[next].id]
+    }
+
+    /// Where the open node sits among its siblings.
+    var detailPosition: (index: Int, siblings: [CanvasNode])? {
+        guard case let .node(id) = detailItem, let node = node(id) else { return nil }
+        let siblings = CanvasGraph.siblings(of: node)
+        guard let index = siblings.firstIndex(where: { $0 === node }) else { return nil }
+        return (index, siblings)
+    }
+
+    /// The prompt of the open node, or of the one selected node.
+    var promptToCopy: String? {
+        switch detailItem {
+        case .reference(let reference):
+            return reference.copyablePrompt
+        case .node(let id):
+            return node(id)?.reference?.copyablePrompt
+        case nil:
+            return selectedNode?.reference?.copyablePrompt
+        }
+    }
+
+    /// ⌘⇧C.
+    func copyPrompt() {
+        if let prompt = promptToCopy { Pasteboard.copy(prompt) }
+    }
+
+    /// Where a node is on screen, for the detail to grow out of and shrink back into.
+    func screenRect(of id: UUID) -> CGRect? {
+        guard let rect = snapshot.node(id)?.rect, viewSize.width > 0 else { return nil }
+        let origin = camera.screenPoint(rect.origin, in: viewSize)
+        return CGRect(x: origin.x, y: origin.y, width: rect.width * camera.zoom, height: rect.height * camera.zoom)
+    }
+
     #if DEBUG
     /// `-MotiffSelect <title>` selects a node; `-MotiffInspector YES` opens the inspector.
     private func applyLaunchSelection() {
         guard let title = DebugLaunchRoute.selectTitle,
               let node = canvas.nodes.first(where: { $0.displayTitle == title })
+                ?? canvas.nodes.first(where: { $0.displayTitle.hasPrefix(title) })
         else { return }
         selection = [node.id]
         editingID = nil
         showsInspector = DebugLaunchRoute.showsInspector
+        if DebugLaunchRoute.showsDetail { detailPath = [.node(node.id)] }
     }
     #endif
 }

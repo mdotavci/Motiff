@@ -4,14 +4,53 @@ import SwiftUI
 import AppKit
 #endif
 
-/// One Reference, full size. Wide windows put the media on the left and the details in a
-/// column on the right; narrow ones stack them.
+/// One Reference, full size, as the Library shows it. The Canvas shows the same
+/// `ReferenceDetailContent` with its own header and a Connections section.
 struct ReferenceDetailView: View {
     let reference: Reference
 
+    var body: some View {
+        ReferenceDetailContent(reference: reference) { EmptyView() }
+            .navigationTitle(reference.origin.label)
+            #if os(macOS)
+            .navigationSubtitle(reference.createdAt.formatted(date: .abbreviated, time: .omitted))
+            #endif
+            .toolbar {
+                ToolbarItemGroup {
+                    if let prompt = reference.copyablePrompt {
+                        Button("Copy Prompt", systemImage: "text.quote") { Pasteboard.copy(prompt) }
+                            .help("Copy the prompt")
+                    }
+                    if reference.hasMedia {
+                        #if os(macOS)
+                        Button("Show in Finder", systemImage: "folder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([reference.mediaURL])
+                        }
+                        .help("Show the media file in Finder")
+                        #endif
+                        ShareLink(item: reference.mediaURL)
+                    } else if let prompt = reference.copyablePrompt {
+                        ShareLink(item: prompt)
+                    }
+                }
+            }
+    }
+}
+
+/// Media and details. Wide windows put the media on the left and the details in a column on
+/// the right; narrow ones stack them. `extra` goes under the details.
+struct ReferenceDetailContent<Extra: View>: View {
+    let reference: Reference
+    let extra: Extra
+
     @State private var width: CGFloat = 0
 
-    private static let sideColumnWidth: CGFloat = 360
+    private static var sideColumnWidth: CGFloat { 360 }
+
+    init(reference: Reference, @ViewBuilder extra: () -> Extra) {
+        self.reference = reference
+        self.extra = extra()
+    }
 
     var body: some View {
         Group {
@@ -23,7 +62,7 @@ struct ReferenceDetailView: View {
                         .background(Color.primary.opacity(0.04))
                     Divider()
                     ScrollView {
-                        ReferenceInfo(reference: reference)
+                        info
                             .padding(Theme.gutter)
                     }
                     .frame(width: Self.sideColumnWidth)
@@ -34,39 +73,40 @@ struct ReferenceDetailView: View {
                         ReferenceMediaView(reference: reference)
                             .aspectRatio(reference.mediaAspectRatio, contentMode: .fit)
                             .frame(maxWidth: .infinity)
-                        ReferenceInfo(reference: reference)
+                        info
                             .padding(Theme.gutter)
                     }
                 }
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .navigationTitle(reference.origin.label)
-        #if os(macOS)
-        .navigationSubtitle(reference.createdAt.formatted(date: .abbreviated, time: .omitted))
-        #endif
-        .toolbar {
-            ToolbarItemGroup {
-                if let prompt = reference.copyablePrompt {
-                    Button("Copy Prompt", systemImage: "text.quote") { Pasteboard.copy(prompt) }
-                        .help("Copy the prompt")
-                }
-                if reference.hasMedia {
-                    #if os(macOS)
-                    Button("Show in Finder", systemImage: "folder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([reference.mediaURL])
-                    }
-                    .help("Show the media file in Finder")
-                    #endif
-                    ShareLink(item: reference.mediaURL)
-                } else if let prompt = reference.copyablePrompt {
-                    ShareLink(item: prompt)
-                }
-            }
-        }
         .onAppear {
             if reference.openedAt == nil { reference.openedAt = .now }
         }
+    }
+
+    private var info: some View {
+        VStack(alignment: .leading, spacing: Theme.unit * 3) {
+            ReferenceInfo(reference: reference)
+            extra
+        }
+    }
+}
+
+/// Opens a Reference from inside its detail (a Remix in Lineage). Where it isn't set, the
+/// links push onto the surrounding NavigationStack.
+struct OpenReferenceAction: Sendable {
+    let open: @MainActor @Sendable (Reference) -> Void
+}
+
+private struct OpenReferenceKey: EnvironmentKey {
+    static let defaultValue: OpenReferenceAction? = nil
+}
+
+extension EnvironmentValues {
+    var openReference: OpenReferenceAction? {
+        get { self[OpenReferenceKey.self] }
+        set { self[OpenReferenceKey.self] = newValue }
     }
 }
 
@@ -100,6 +140,14 @@ struct ReferenceInfo: View {
             if !reference.boards.isEmpty {
                 DetailSection("Boards") {
                     Text(reference.boards.map(\.name).sorted().joined(separator: ", "))
+                        .font(.callout)
+                }
+            }
+
+            let canvases = Set(reference.canvasNodes.compactMap { $0.canvas?.displayTitle }).sorted()
+            if !canvases.isEmpty {
+                DetailSection("Canvases") {
+                    Text(canvases.joined(separator: ", "))
                         .font(.callout)
                 }
             }
@@ -372,24 +420,33 @@ private struct LineageLink: View {
     let reference: Reference
     let caption: String
 
+    @Environment(\.openReference) private var openReference
+
     var body: some View {
-        NavigationLink(value: reference) {
-            HStack(spacing: Theme.unit) {
-                ThumbnailImage(url: reference.mediaURL, pointSize: 44)
-                    .frame(width: 44, height: 44)
-                    .clipped()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(caption).font(.caption).foregroundStyle(.secondary)
-                    Text(reference.origin.label).font(.callout)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
+        if let openReference {
+            Button { openReference.open(reference) } label: { row }
+                .buttonStyle(.plain)
+        } else {
+            NavigationLink(value: reference) { row }
+                .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+    }
+
+    private var row: some View {
+        HStack(spacing: Theme.unit) {
+            ThumbnailImage(url: reference.mediaURL, pointSize: 44)
+                .frame(width: 44, height: 44)
+                .clipped()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+                Text(reference.origin.label).font(.callout)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
     }
 }
 
