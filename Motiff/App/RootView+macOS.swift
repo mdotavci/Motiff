@@ -63,6 +63,13 @@ struct RootView: View {
     @State private var libraryReference: Reference?
 
     var body: some View {
+        withDialogs(withPanels(splitView))
+        #if DEBUG
+        .task { await applyLaunchRoute() }
+        #endif
+    }
+
+    private var splitView: some View {
         NavigationSplitView {
             List(selection: $selection) {
                 ForEach(SidebarItem.allCases, id: \.self) { item in
@@ -77,68 +84,75 @@ struct RootView: View {
             detail
         }
         .tint(.primary)
-        .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas, newBoard: newBoard))
-        .focusedSceneValue(\.showShortcuts, ShortcutsAction { showsShortcuts = true })
-        .focusedSceneValue(\.showPalette, PaletteAction(show: showPalette))
-        #if DEBUG
-        .focusedSceneValue(\.debugActions, DebugActions(makeStressCanvas: makeStressCanvas))
-        #endif
-        .overlay(alignment: .top) {
-            if let items = paletteItems {
-                ZStack(alignment: .top) {
-                    Color.black.opacity(0.06)
-                        .ignoresSafeArea()
-                        .onTapGesture { paletteItems = nil }
-                    CommandPalette(items: items) { paletteItems = nil }
-                        .padding(.top, 72)
+    }
+
+    /// Menu actions, the ⌘K palette, the shortcut sheet and undo wiring.
+    private func withPanels(_ content: some View) -> some View {
+        content
+            .focusedSceneValue(\.canvasActions, CanvasActions(newCanvas: newCanvas, newBoard: newBoard))
+            .focusedSceneValue(\.showShortcuts, ShortcutsAction { showsShortcuts = true })
+            .focusedSceneValue(\.showPalette, PaletteAction(show: showPalette))
+            #if DEBUG
+            .focusedSceneValue(\.debugActions, DebugActions(makeStressCanvas: makeStressCanvas))
+            #endif
+            .overlay(alignment: .top) {
+                if let items = paletteItems {
+                    ZStack(alignment: .top) {
+                        Color.black.opacity(0.06)
+                            .ignoresSafeArea()
+                            .onTapGesture { paletteItems = nil }
+                        CommandPalette(items: items) { paletteItems = nil }
+                            .padding(.top, 72)
+                    }
                 }
             }
-        }
-        .sheet(isPresented: $showsShortcuts) {
-            ShortcutHelpView()
-        }
-        // Edit › Undo / Redo reach SwiftData through the window's undo manager.
-        .onChange(of: undoManager.map(ObjectIdentifier.init), initial: true) {
-            context.undoManager = undoManager
-        }
-        .alert("Rename Canvas", isPresented: isRenaming) {
-            TextField("Title", text: $draftTitle)
-            Button("Rename") {
-                renaming?.title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                CanvasGraph.touch(renaming)
-                try? context.save()
+            .sheet(isPresented: $showsShortcuts) {
+                ShortcutHelpView()
             }
-            Button("Cancel", role: .cancel) {}
-        }
-        .alert("Name the Board", isPresented: isRenamingBoard) {
-            TextField("Name", text: $draftTitle)
-            Button("Save") {
-                renamingBoard?.name = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                try? context.save()
+            // Edit › Undo / Redo reach SwiftData through the window's undo manager.
+            .onChange(of: undoManager.map(ObjectIdentifier.init), initial: true) {
+                context.undoManager = undoManager
             }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Delete “\(pendingBoardDelete?.displayName ?? "")”?",
-            isPresented: isConfirmingBoardDelete,
-            presenting: pendingBoardDelete
-        ) { board in
-            Button("Delete Board", role: .destructive) { delete(board) }
-        } message: { _ in
-            Text("Its references stay in the Library.")
-        }
-        .confirmationDialog(
-            "Delete “\(pendingDelete?.displayTitle ?? "")”?",
-            isPresented: isConfirmingDelete,
-            presenting: pendingDelete
-        ) { canvas in
-            Button("Delete Canvas", role: .destructive) { delete(canvas) }
-        } message: { _ in
-            Text("Its Ideas, notes and links are deleted. References stay in the Library.")
-        }
-        #if DEBUG
-        .task { await applyLaunchRoute() }
-        #endif
+    }
+
+    /// Rename and delete prompts for Canvases and Boards.
+    private func withDialogs(_ content: some View) -> some View {
+        content
+            .alert("Rename Canvas", isPresented: isRenaming) {
+                TextField("Title", text: $draftTitle)
+                Button("Rename") {
+                    renaming?.title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    CanvasGraph.touch(renaming)
+                    try? context.save()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("Name the Board", isPresented: isRenamingBoard) {
+                TextField("Name", text: $draftTitle)
+                Button("Save") {
+                    renamingBoard?.name = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    try? context.save()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                "Delete “\(pendingBoardDelete?.displayName ?? "")”?",
+                isPresented: isConfirmingBoardDelete,
+                presenting: pendingBoardDelete
+            ) { board in
+                Button("Delete Board", role: .destructive) { delete(board) }
+            } message: { _ in
+                Text("Its references stay in the Library.")
+            }
+            .confirmationDialog(
+                "Delete “\(pendingDelete?.displayTitle ?? "")”?",
+                isPresented: isConfirmingDelete,
+                presenting: pendingDelete
+            ) { canvas in
+                Button("Delete Canvas", role: .destructive) { delete(canvas) }
+            } message: { _ in
+                Text("Its Ideas, notes and links are deleted. References stay in the Library.")
+            }
     }
 
     private var boardsSection: some View {
