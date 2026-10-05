@@ -6,6 +6,22 @@ import SwiftData
 extension SeedData {
     /// Set once the example Canvas has been made, so deleting it doesn't bring it back.
     static let canvasSeededKey = "seed.canvas"
+    /// Set once Canvases made with the first palette have moved to the pastel one.
+    static let pastelPaletteKey = "palette.v2"
+
+    /// Recolors categories that still use the first palette's colors, once.
+    @MainActor
+    static func migratePaletteIfNeeded(context: ModelContext) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: pastelPaletteKey) else { return }
+        let categories = (try? context.fetch(FetchDescriptor<CanvasCategory>())) ?? []
+        // Not something to undo.
+        context.undoManager?.disableUndoRegistration()
+        CanvasGraph.migrateToPastelPalette(categories)
+        context.undoManager?.enableUndoRegistration()
+        try? context.save()
+        defaults.set(true, forKey: pastelPaletteKey)
+    }
 
     /// Makes the example Canvas the first time the app runs with Canvases, including on a
     /// library seeded before Canvases existed. Uses the twelve oldest References, which are
@@ -42,10 +58,10 @@ extension SeedData {
             title: "Product photography look",
             rootTitle: "Product photography look",
             categories: [
-                .init(name: "Light", hex: "#C58A2C"),
-                .init(name: "Composition", hex: "#4C63D2"),
-                .init(name: "Reference", hex: "#287F75"),
-                .init(name: "To try", hex: "#C4733F"),
+                .init(name: "Light", hex: "#F6D77A"),
+                .init(name: "Composition", hex: "#9CC4F2"),
+                .init(name: "Reference", hex: "#8FD6CF"),
+                .init(name: "To try", hex: "#F7B98A"),
             ],
             in: context
         )

@@ -8,6 +8,10 @@ final class CanvasLink {
     var id: UUID = UUID()
     /// A short optional word or two on the line, like "contrast" or "next step".
     var label: String?
+    /// "#RRGGBB" for the line; nil draws it grey.
+    var colorHex: String?
+    /// An arrowhead at the `to` end.
+    var hasArrow: Bool = true
 
     var canvas: Canvas?
     /// Inverse on `CanvasNode.outgoing`.

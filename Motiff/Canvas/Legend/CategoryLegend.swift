@@ -147,7 +147,7 @@ private struct CategoryEditor: View {
     }
 }
 
-/// The category's color; click for the ten swatches. There's no free picker, so no red.
+/// The category's color; click for the palette and Custom….
 private struct SwatchButton: View {
     let category: CanvasCategory
     let controller: CanvasController
@@ -164,28 +164,11 @@ private struct SwatchButton: View {
         .buttonStyle(.plain)
         .help("Color")
         .popover(isPresented: $isPicking, arrowEdge: .bottom) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5), spacing: 8) {
-                ForEach(CanvasCategory.swatches, id: \.hex) { swatch in
-                    Button {
-                        controller.update { CanvasGraph.setColor(category, to: swatch.hex) }
-                        isPicking = false
-                    } label: {
-                        Circle()
-                            .fill(HexColor(swatch.hex)?.color ?? .gray)
-                            .frame(width: 22, height: 22)
-                            .overlay {
-                                if swatch.hex == category.colorHex {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(HexColor(swatch.hex)?.textColor ?? .white)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .help(swatch.name)
-                    .accessibilityLabel(swatch.name)
-                }
+            ColorPalettePicker(current: category.colorHex) { hex in
+                guard let hex else { return }
+                controller.update { CanvasGraph.setColor(category, to: hex) }
             }
+            .frame(width: 280)
             .padding(12)
         }
     }

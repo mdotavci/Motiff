@@ -22,18 +22,18 @@ struct NodeView: View {
     }
 }
 
-/// A circle filled with the Idea's category color, its title inside.
+/// A circle filled with the Idea's color (its own, or its category's), its title inside.
 struct IdeaNodeView: View {
     let node: CanvasNode
     let diameter: CGFloat
     var editor: CanvasController?
 
     var body: some View {
-        let hex = node.category?.hexColor
+        let hex = node.effectiveColorHex
         Circle()
-            .fill(hex?.color ?? Theme.neutralIdea)
+            .fill(Palette.fill(hex) ?? Theme.neutralIdea)
             .overlay {
-                if hex == nil {
+                if hex == nil || Palette.needsOutline(hex) {
                     Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
                 }
             }
@@ -48,7 +48,7 @@ struct IdeaNodeView: View {
                     }
                 }
                 .font(.system(size: fontSize, weight: .semibold))
-                .foregroundStyle(hex?.textColor ?? Color.primary)
+                .foregroundStyle(Palette.text(on: hex, chosen: node.textColorHex))
                 .multilineTextAlignment(.center)
                 .padding(diameter * 0.14)
             }
@@ -74,15 +74,19 @@ struct CardView: View {
     var isPlaying = false
 
     var body: some View {
+        let hex = node.effectiveColorHex
+        // A Note with a color is a sticky note: filled with it all over.
+        let isSticky = node.kind == .note && hex != nil
         VStack(spacing: 0) {
             Rectangle()
-                .fill(node.category?.color ?? Color.primary.opacity(0.12))
+                .fill(Palette.fill(hex) ?? Color.primary.opacity(0.12))
+                .brightness(isSticky ? -0.06 : 0)
                 .frame(height: CanvasLayout.stripHeight)
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(width: size.width, height: size.height)
-        .background(Theme.cardSurface)
+        .background(isSticky ? Palette.fill(hex) ?? Theme.cardSurface : Theme.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner))
         .overlay {
             RoundedRectangle(cornerRadius: Theme.cardCorner)
@@ -96,25 +100,28 @@ struct CardView: View {
         case .reference:
             if let reference = node.reference {
                 ReferenceCardContent(
-                    reference: reference, category: node.category, width: size.width, zoom: zoom, isPlaying: isPlaying
+                    reference: reference, colorHex: node.effectiveColorHex, width: size.width, zoom: zoom, isPlaying: isPlaying
                 )
             } else {
                 MissingReference()
             }
         case .prompt:
             if let reference = node.reference {
-                PromptCardContent(reference: reference, category: node.category, width: size.width, zoom: zoom)
+                PromptCardContent(reference: reference, colorHex: node.effectiveColorHex, width: size.width, zoom: zoom)
             } else {
                 MissingReference()
             }
         case .note:
-            if let editor {
-                InlineEditor(controller: editor, nodeID: node.id, prompt: "Note", axis: .vertical)
-                    .font(.system(size: 14))
-                    .padding(12)
-            } else {
-                NoteCardContent(text: node.body ?? "")
+            Group {
+                if let editor {
+                    InlineEditor(controller: editor, nodeID: node.id, prompt: "Note", axis: .vertical)
+                        .font(.system(size: 14))
+                        .padding(12)
+                } else {
+                    NoteCardContent(text: node.body ?? "")
+                }
             }
+            .foregroundStyle(Palette.text(on: node.effectiveColorHex, chosen: node.textColorHex))
         case .link:
             LinkCardContent(title: node.displayTitle, url: node.url, iconFilename: node.iconFilename, editor: editor, nodeID: node.id)
         case .idea, .text:
@@ -138,7 +145,7 @@ struct TextNodeView: View {
             }
         }
         .font(.system(size: size.fontSize, weight: size.isBold ? .bold : .regular))
-        .foregroundStyle(.primary)
+        .foregroundStyle(node.textColorHex.map(Palette.ink) ?? Color.primary)
         .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
@@ -152,7 +159,7 @@ struct TextNodeView: View {
 /// Media first, origin and purpose in its corners, the caption below.
 private struct ReferenceCardContent: View {
     let reference: Reference
-    let category: CanvasCategory?
+    let colorHex: String?
     let width: CGFloat
     let zoom: CGFloat
     var isPlaying = false
@@ -160,7 +167,7 @@ private struct ReferenceCardContent: View {
     var body: some View {
         let mediaHeight = (width * reference.displayAspectRatio).rounded()
         VStack(alignment: .leading, spacing: 0) {
-            CardMedia(reference: reference, category: category, pointSize: max(width, mediaHeight) * zoom, isPlaying: isPlaying)
+            CardMedia(reference: reference, colorHex: colorHex, pointSize: max(width, mediaHeight) * zoom, isPlaying: isPlaying)
                 .frame(width: width, height: mediaHeight)
                 .clipped()
                 .overlay(alignment: .topLeading) {
@@ -184,7 +191,7 @@ private struct ReferenceCardContent: View {
 /// Prompt first: a band of media (or the typographic cover), then the prompt in mono.
 private struct PromptCardContent: View {
     let reference: Reference
-    let category: CanvasCategory?
+    let colorHex: String?
     let width: CGFloat
     let zoom: CGFloat
 
@@ -192,7 +199,7 @@ private struct PromptCardContent: View {
         let prompt = reference.copyablePrompt ?? ""
         let bandHeight: CGFloat = reference.hasMedia ? 84 : 110
         VStack(alignment: .leading, spacing: 0) {
-            CardMedia(reference: reference, category: category, pointSize: width * zoom)
+            CardMedia(reference: reference, colorHex: colorHex, pointSize: width * zoom)
                 .frame(width: width, height: bandHeight)
                 .clipped()
                 .overlay(alignment: .topLeading) {
@@ -228,10 +235,10 @@ private struct PromptCardContent: View {
     }
 }
 
-/// The Reference's media, or its typographic cover on the card's category color.
+/// The Reference's media, or its typographic cover on the card's color.
 private struct CardMedia: View {
     let reference: Reference
-    let category: CanvasCategory?
+    let colorHex: String?
     /// Longest side as drawn on screen, in points.
     let pointSize: CGFloat
     var isPlaying = false
@@ -242,7 +249,7 @@ private struct CardMedia: View {
         } else if reference.hasMedia {
             ThumbnailImage(url: reference.mediaURL, pointSize: pointSize)
         } else {
-            TypographicCover(text: reference.copyablePrompt ?? "", background: category?.hexColor)
+            TypographicCover(text: reference.copyablePrompt ?? "", background: colorHex.flatMap(HexColor.init))
         }
     }
 }

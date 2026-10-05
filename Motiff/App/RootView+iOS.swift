@@ -9,7 +9,7 @@ enum AppTab: Hashable {
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.undoManager) private var undoManager
-    @State private var tab: AppTab = .library
+    @State private var tab: AppTab = Self.launchTab
     /// The Canvas open in the Canvases tab.
     @State private var canvasPath: [UUID] = []
 
@@ -42,22 +42,35 @@ struct RootView: View {
         #endif
     }
 
+    /// The tab `-MotiffOpen` names (Debug builds), set before the first frame.
+    private static var launchTab: AppTab {
+        #if DEBUG
+        switch DebugLaunchRoute.open ?? "" {
+        case "inbox": return .inbox
+        case "boards": return .boards
+        case "canvases": return .canvases
+        case let route where route.hasPrefix("canvas:"): return .canvases
+        default: return .library
+        }
+        #else
+        return .library
+        #endif
+    }
+
     #if DEBUG
-    /// Opens the tab (and Canvas) named by `-MotiffOpen`; CI then screenshots the simulator.
+    /// Opens the Canvas named by `-MotiffOpen canvas:<title>`; CI then screenshots the simulator.
     private func applyLaunchRoute() async {
-        guard let route = DebugLaunchRoute.open else { return }
-        // Seeding also runs at launch; give it a moment so a seeded Canvas can be found.
-        try? await Task.sleep(for: .seconds(1.5))
-        switch route {
-        case "inbox": tab = .inbox
-        case "boards": tab = .boards
-        case "canvases": tab = .canvases
-        case let route where route.hasPrefix("canvas:"):
-            let title = String(route.dropFirst("canvas:".count))
+        guard let route = DebugLaunchRoute.open, route.hasPrefix("canvas:") else { return }
+        let title = String(route.dropFirst("canvas:".count))
+        // Seeding also runs at launch; wait for the seeded Canvas to be there.
+        for _ in 0..<20 {
             let all = (try? context.fetch(FetchDescriptor<Canvas>())) ?? []
-            tab = .canvases
-            if let canvas = all.first(where: { $0.title == title }) { canvasPath = [canvas.id] }
-        default: tab = .library
+            if let canvas = all.first(where: { $0.title == title }) {
+                tab = .canvases
+                canvasPath = [canvas.id]
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(250))
         }
     }
     #endif

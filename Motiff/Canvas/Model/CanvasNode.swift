@@ -36,6 +36,17 @@ final class CanvasNode {
     /// Text: its `TextSize`; nil is medium.
     var textSizeRaw: Int?
 
+    // MARK: Look
+
+    /// "#RRGGBB": an Idea's or a Note's fill, a card's strip. nil follows the category.
+    var colorHex: String?
+    /// "#RRGGBB" for the words; nil picks black or white for the fill (or the theme's text).
+    var textColorHex: String?
+    /// "#RRGGBB" for the line to `parent`; nil draws it grey.
+    var lineColorHex: String?
+    /// An arrowhead on the line to `parent`, pointing at this node.
+    var lineHasArrow: Bool = false
+
     // MARK: Relationships
 
     var canvas: Canvas?
@@ -66,6 +77,11 @@ extension CanvasNode {
     }
 
     var isIdea: Bool { kind == .idea }
+
+    /// The color it's drawn in: its own, or its category's.
+    var effectiveColorHex: String? {
+        colorHex ?? category?.colorHex
+    }
 
     var textSize: TextSize {
         get { textSizeRaw.flatMap(TextSize.init(rawValue:)) ?? .medium }

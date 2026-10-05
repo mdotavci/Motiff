@@ -49,6 +49,10 @@ struct CanvasSnapshot: Equatable, Sendable {
         let to: UUID
         let type: LinkType
         let label: String?
+        /// "#RRGGBB"; nil draws it grey.
+        var colorHex: String? = nil
+        /// An arrowhead at the `to` end.
+        var hasArrow = false
     }
 
     /// Cards first, Ideas last, so circles draw on top.
@@ -75,18 +79,24 @@ struct CanvasSnapshot: Equatable, Sendable {
                 id: node.id,
                 kind: node.kind,
                 rect: CGRect(x: node.x - size.width / 2, y: node.y - size.height / 2, width: size.width, height: size.height),
-                colorHex: node.category?.colorHex,
+                colorHex: node.effectiveColorHex,
                 title: node.displayTitle,
                 categoryID: node.category?.id,
                 purpose: node.reference?.purpose
             ))
             if let parent = node.parent, !parent.isDeleted {
-                edges.append(Edge(id: "parent-\(node.id)", from: parent.id, to: node.id, type: .belongsTo, label: node.parentLabel))
+                edges.append(Edge(
+                    id: "parent-\(node.id)", from: parent.id, to: node.id, type: .belongsTo, label: node.parentLabel,
+                    colorHex: node.lineColorHex, hasArrow: node.lineHasArrow
+                ))
             }
         }
         for link in canvas.links {
             guard !link.isDeleted, let from = link.from, let to = link.to else { continue }
-            edges.append(Edge(id: link.id.uuidString, from: from.id, to: to.id, type: .relatesTo, label: link.label))
+            edges.append(Edge(
+                id: link.id.uuidString, from: from.id, to: to.id, type: .relatesTo, label: link.label,
+                colorHex: link.colorHex, hasArrow: link.hasArrow
+            ))
         }
         self.init(nodes: nodes, edges: edges)
     }

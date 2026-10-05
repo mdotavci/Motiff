@@ -46,14 +46,16 @@ final class CanvasCategoryTests: XCTestCase {
     }
 
     @MainActor
-    func testColorsComeOnlyFromTheSwatches() throws {
+    func testAnyColorButFocusRed() throws {
         let store = try TestStore()
         let new = CanvasGraph.makeCanvas(title: "", in: store.context)
         let category = new.categories[0]
-        CanvasGraph.setColor(category, to: "#E2231A")
-        XCTAssertEqual(category.colorHex, CanvasCategory.defaults[0].hex, "focus red is refused")
-        CanvasGraph.setColor(category, to: "#8E5A8A")
-        XCTAssertEqual(category.colorHex, "#8E5A8A")
+        XCTAssertFalse(CanvasGraph.setColor(category, to: "#E2231A"))
+        XCTAssertFalse(CanvasGraph.setColor(category, to: "#FF1010"), "near focus red is refused too")
+        XCTAssertEqual(category.colorHex, CanvasCategory.defaults[0].hex)
+        XCTAssertTrue(CanvasGraph.setColor(category, to: "#8e5a8a"))
+        XCTAssertEqual(category.colorHex, "#8E5A8A", "a custom color, stored in capitals")
+        XCTAssertFalse(CanvasGraph.setColor(category, to: "blue"))
     }
 
     func testFiltersMatchCategoryAndPurposeTogether() {

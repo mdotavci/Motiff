@@ -33,6 +33,20 @@ struct NodeMenu: View {
                 act { controller.assignCategory(number: 0) }
             }
         }
+        Menu("Color", systemImage: "paintpalette") {
+            ForEach(CanvasCategory.swatches, id: \.hex) { swatch in
+                Button(swatch.name) {
+                    act { controller.setColor(swatch.hex) }
+                }
+            }
+            Divider()
+            Button(node.kind == .text ? "Automatic" : "Category Color") {
+                act { controller.setColor(nil) }
+            }
+            Button("More Colors…") {
+                act { controller.openColorPicker() }
+            }
+        }
         Button("Link To…", systemImage: "link") {
             controller.startLink(from: node.id)
         }

@@ -88,7 +88,7 @@ struct CanvasMapView: View {
                 keys: [
                     .tab, .return, .delete, .deleteForward, .escape, .space,
                     .leftArrow, .rightArrow, .upArrow, .downArrow, "l", Self.backTab,
-                    "v", "h", "o", "n", "t", "i",
+                    "v", "h", "o", "n", "t", "i", "c", "a",
                     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                 ],
                 phases: [.down, .repeat]
@@ -322,7 +322,12 @@ struct CanvasMapView: View {
                 }
                 .onTapGesture(count: 1, coordinateSpace: .named(Self.space)) { location in
                     guard !useTool(at: location) else { return }
-                    controller.clearSelection()
+                    // A click on a line selects it; anywhere else clears.
+                    if controller.tool == .select, let edge = controller.edgeID(at: location) {
+                        controller.selectEdge(edge)
+                    } else {
+                        controller.clearSelection()
+                    }
                     mapFocused = true
                 }
 
@@ -330,6 +335,7 @@ struct CanvasMapView: View {
                 snapshot: shown,
                 camera: camera,
                 hoveredEdgeID: controller.hoveredEdgeID,
+                selectedEdgeID: controller.selectedEdgeID,
                 focus: controller.edgeFocus
             )
 
@@ -366,6 +372,14 @@ struct CanvasMapView: View {
                 if let geometry = shown.node(id) {
                     handle(for: geometry, camera: camera, size: size)
                 }
+            }
+
+            if let anchor = selectionBarAnchor(in: shown, camera: camera, size: size) {
+                SelectionBar(controller: controller) { edge in
+                    labelDraft = edge.label ?? ""
+                    labelingEdge = edge
+                }
+                .position(anchor)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -438,6 +452,29 @@ struct CanvasMapView: View {
         guard let request, request.canvasID == canvas.id else { return }
         self.request = nil
         controller.perform(request.action)
+    }
+
+    /// Where the selection bar sits: centered above the selected nodes, or above the middle of
+    /// the selected line. Nil while there's nothing to show it for, or while typing or dragging.
+    private func selectionBarAnchor(in shown: CanvasSnapshot, camera: CanvasCamera, size: CGSize) -> CGPoint? {
+        guard controller.editingID == nil, controller.drag == nil, controller.connect == nil,
+              !controller.linkMode, !controller.isShowingDetail
+        else { return nil }
+        let top: CGPoint
+        if let edge = controller.selectedEdge, let segment = shown.segment(of: edge) {
+            top = CGPoint(x: (segment.start.x + segment.end.x) / 2, y: (segment.start.y + segment.end.y) / 2)
+        } else {
+            let rects = controller.selection.compactMap { shown.node($0)?.rect }
+            guard let first = rects.first else { return nil }
+            let union = rects.dropFirst().reduce(first) { $0.union($1) }
+            top = CGPoint(x: union.midX, y: union.minY)
+        }
+        let point = camera.screenPoint(top, in: size)
+        // Above it, kept inside the view.
+        return CGPoint(
+            x: min(max(point.x, 140), max(size.width - 140, 140)),
+            y: max(point.y - 34, 28)
+        )
     }
 
     /// Big enough for a finger on iPhone.
@@ -554,6 +591,23 @@ struct CanvasMapView: View {
         Button(edge.type == .belongsTo ? "Change to Relates To" : "Change to Belongs To") {
             controller.convert(edge)
         }
+        Menu("Color") {
+            ForEach(CanvasCategory.swatches, id: \.hex) { swatch in
+                Button(swatch.name) {
+                    controller.selectEdge(edge.id)
+                    controller.setColor(swatch.hex)
+                }
+            }
+            Divider()
+            Button("Grey") {
+                controller.selectEdge(edge.id)
+                controller.setColor(nil)
+            }
+        }
+        Button(edge.hasArrow ? "Hide Arrow" : "Show Arrow") {
+            controller.selectEdge(edge.id)
+            controller.toggleArrow()
+        }
         Divider()
         Button(edge.type == .belongsTo ? "Detach" : "Delete Link", role: .destructive) {
             controller.deleteEdge(edge)
@@ -664,7 +718,15 @@ struct CanvasMapView: View {
         case .return where plain:
             controller.beginEditing()
         case .delete, .deleteForward:
-            controller.deleteSelection(branch: command)
+            if let edge = controller.selectedEdge {
+                controller.deleteEdge(edge)
+            } else {
+                controller.deleteSelection(branch: command)
+            }
+        case "c" where plain:
+            controller.openColorPicker()
+        case "a" where plain:
+            controller.toggleArrow()
         case "l" where plain:
             controller.toggleLinkMode()
         case .space where plain:
@@ -674,6 +736,8 @@ struct CanvasMapView: View {
                 controller.setTool(.select)
             } else if controller.linkMode {
                 controller.toggleLinkMode()
+            } else if controller.selectedEdgeID != nil {
+                controller.clearSelection()
             } else if controller.selection.isEmpty, controller.isFiltering {
                 controller.clearFilters()
             } else {

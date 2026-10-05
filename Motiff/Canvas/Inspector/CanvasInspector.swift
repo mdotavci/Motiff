@@ -61,6 +61,23 @@ private struct NodeInspector: View {
                 }
             }
 
+            DetailSection(node.kind == .text ? "Text Color" : "Color") {
+                ColorPalettePicker(
+                    current: node.kind == .text ? node.textColorHex : node.colorHex,
+                    resetTitle: node.kind == .text ? "Automatic" : "Category Color"
+                ) { hex in
+                    controller.setColor(hex)
+                }
+            }
+
+            if node.kind == .idea || node.kind == .note {
+                DetailSection("Text Color") {
+                    ColorPalettePicker(current: node.textColorHex, resetTitle: "Automatic") { hex in
+                        controller.setTextColor(hex)
+                    }
+                }
+            }
+
             ConnectionList(node: node) { other in
                 controller.focus(on: other.id)
             } detach: { child in

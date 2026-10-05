@@ -330,11 +330,68 @@ enum CanvasGraph {
         touch(category.canvas)
     }
 
-    /// Only the curated swatches are allowed, so no category lands on focus red.
-    static func setColor(_ category: CanvasCategory, to hex: String) {
-        guard CanvasCategory.swatches.contains(where: { $0.hex == hex }) else { return }
+    /// Any color but one too close to focus red. Returns false when it's refused.
+    @discardableResult
+    static func setColor(_ category: CanvasCategory, to hex: String) -> Bool {
+        guard let hex = CanvasCategory.normalized(hex), !CanvasCategory.isFocusRed(hex) else { return false }
         category.colorHex = hex
         touch(category.canvas)
+        return true
+    }
+
+    // MARK: Look
+
+    /// The fill of Ideas and Notes, the strip of cards, the words of Text. nil goes back to the
+    /// category's color. Refuses colors too close to focus red.
+    @discardableResult
+    static func setColor(_ hex: String?, of nodes: [CanvasNode]) -> Bool {
+        guard let value = checked(hex) else { return false }
+        for node in nodes {
+            if node.kind == .text { node.textColorHex = value } else { node.colorHex = value }
+        }
+        touch(nodes.first?.canvas)
+        return true
+    }
+
+    /// The words of Ideas, Notes and Text. nil picks black or white for the fill.
+    @discardableResult
+    static func setTextColor(_ hex: String?, of nodes: [CanvasNode]) -> Bool {
+        guard let value = checked(hex) else { return false }
+        for node in nodes { node.textColorHex = value }
+        touch(nodes.first?.canvas)
+        return true
+    }
+
+    /// A line's color: a link's own, or the belongs-to line stored on its child.
+    @discardableResult
+    static func setLineColor(_ hex: String?, child: CanvasNode?, link: CanvasLink?) -> Bool {
+        guard let value = checked(hex) else { return false }
+        child?.lineColorHex = value
+        link?.colorHex = value
+        touch(child?.canvas ?? link?.canvas)
+        return true
+    }
+
+    static func setArrow(_ on: Bool, child: CanvasNode?, link: CanvasLink?) {
+        child?.lineHasArrow = on
+        link?.hasArrow = on
+        touch(child?.canvas ?? link?.canvas)
+    }
+
+    /// `.some(nil)` to clear, `.some(hex)` when the color is usable, nil when it's refused.
+    private static func checked(_ hex: String?) -> String?? {
+        guard let hex else { return .some(nil) }
+        guard let normalized = CanvasCategory.normalized(hex), !CanvasCategory.isFocusRed(normalized) else { return nil }
+        return .some(normalized)
+    }
+
+    /// Moves Canvases made with the first palette onto the pastel one. Custom colors stay.
+    static func migrateToPastelPalette(_ categories: [CanvasCategory]) {
+        for category in categories {
+            if let pastel = CanvasCategory.legacyColors[category.colorHex.uppercased()] {
+                category.colorHex = pastel
+            }
+        }
     }
 
     private static func renumber(_ categories: [CanvasCategory]) {

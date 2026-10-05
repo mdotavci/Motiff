@@ -10,6 +10,7 @@ enum SeedData {
     static func seedIfNeeded(context: ModelContext) {
         seedReferencesIfNeeded(context: context)
         seedCanvasIfNeeded(context: context)
+        migratePaletteIfNeeded(context: context)
     }
 
     @MainActor

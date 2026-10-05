@@ -201,6 +201,13 @@ enum ShortcutCatalog {
     static let linkModeClicks = Shortcut("Link in Link Mode", pointer: "Click one node, then another")
     static let stopLinkMode = Shortcut("Stop Link Mode", .escape)
     static let lineMenu = Shortcut("Label, Change or Delete a Line", pointer: "Right-click the line")
+    static let selectLine = Shortcut("Select a Line", pointer: "Click it")
+
+    // MARK: Canvas: colors
+
+    static let color = Shortcut("Color of the Selection or Line", "c")
+    static let arrow = Shortcut("Arrowhead On or Off (a selected line)", "a")
+    static let deleteLine = Shortcut("Delete the Selected Line", .delete)
 
     static let sections: [ShortcutSection] = [
         ShortcutSection(title: "Motiff", items: [newCanvas, goTo, undo, redo, showShortcuts]),
@@ -230,6 +237,7 @@ enum ShortcutCatalog {
         ShortcutSection(title: "Canvas connections", items: [
             connect, connectLink, linkMode, linkModeClicks, stopLinkMode, lineMenu,
         ]),
+        ShortcutSection(title: "Canvas colors and lines", items: [color, selectLine, arrow, deleteLine]),
     ]
 }
 

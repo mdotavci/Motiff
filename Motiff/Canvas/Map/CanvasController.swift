@@ -100,6 +100,12 @@ final class CanvasController {
     /// ⌥⌘L: the Library panel beside the Map, to drag References in from.
     var showsLibrary = false
 
+    /// A line clicked on the Map: ⌫ deletes it, C colors it, A turns its arrow on or off.
+    /// A node selection and a line selection never coexist.
+    private(set) var selectedEdgeID: String?
+    /// C, or the selection bar's color dot: the color popover is open.
+    var showsColorPicker = false
+
     /// A Note just made with Tab: if it's left empty, it isn't kept.
     @ObservationIgnored private var freshID: UUID?
 
@@ -154,6 +160,7 @@ final class CanvasController {
         let live = selection.filter { nodesByID[$0] != nil }
         if live != selection { selection = live }
         if let editingID, nodesByID[editingID] == nil { self.editingID = nil }
+        if let selectedEdgeID, snapshot.edge(selectedEdgeID) == nil { self.selectedEdgeID = nil }
         if isSearching { searchResults = CanvasSearch.matches(in: canvas, query: searchText) }
         let liveCategories = categoryFilter.intersection(canvas.categories.map(\.id))
         if liveCategories != categoryFilter { categoryFilter = liveCategories }
@@ -405,6 +412,7 @@ final class CanvasController {
     func tap(_ id: UUID, extending: Bool) {
         guard editingID != id else { return }
         endEditing()
+        selectedEdgeID = nil
         if linkMode {
             if let sourceID = linkSourceID, sourceID != id {
                 makeLink(from: sourceID, to: id)
@@ -426,6 +434,84 @@ final class CanvasController {
         endEditing()
         linkSourceID = nil
         selection = []
+        selectedEdgeID = nil
+    }
+
+    // MARK: Lines and colors
+
+    /// The line under a point in the view, if any.
+    func edgeID(at viewPoint: CGPoint) -> String? {
+        snapshot.edge(near: camera.canvasPoint(viewPoint, in: viewSize), tolerance: Self.edgeTolerance / camera.zoom)?.id
+    }
+
+    var selectedEdge: CanvasSnapshot.Edge? {
+        selectedEdgeID.flatMap { snapshot.edge($0) }
+    }
+
+    func selectEdge(_ id: String) {
+        endEditing()
+        linkSourceID = nil
+        selection = []
+        selectedEdgeID = id
+    }
+
+    /// The color of what's selected: the nodes' fill (Text: its words), or the line's.
+    /// nil goes back to the category's color (or grey). Each change is one Undo step.
+    func setColor(_ hex: String?) {
+        if let edge = selectedEdge {
+            let (child, link) = parts(of: edge)
+            guard child != nil || link != nil else { return }
+            change { CanvasGraph.setLineColor(hex, child: child, link: link) }
+        } else {
+            let nodes = selectedNodes
+            guard !nodes.isEmpty else { return }
+            change { CanvasGraph.setColor(hex, of: nodes) }
+        }
+    }
+
+    /// The words of the selected Ideas, Notes and Text.
+    func setTextColor(_ hex: String?) {
+        let nodes = selectedNodes
+        guard !nodes.isEmpty else { return }
+        change { CanvasGraph.setTextColor(hex, of: nodes) }
+    }
+
+    /// The color of what's selected, as stored: what the color dot shows.
+    var selectionColorHex: String? {
+        if let edge = selectedEdge { return edge.colorHex }
+        guard let node = selectedNodes.first else { return nil }
+        return node.kind == .text ? node.textColorHex : node.effectiveColorHex
+    }
+
+    /// A: the selected line's arrowhead on or off.
+    func toggleArrow() {
+        guard let edge = selectedEdge else { return }
+        let (child, link) = parts(of: edge)
+        guard child != nil || link != nil else { return }
+        update { CanvasGraph.setArrow(!edge.hasArrow, child: child, link: link) }
+    }
+
+    /// C: the color popover for the selection or the selected line.
+    func openColorPicker() {
+        guard !selection.isEmpty || selectedEdgeID != nil else { return }
+        showsColorPicker = true
+    }
+
+    /// Text size for every selected Text node.
+    func setTextSizeOfSelection(_ size: TextSize) {
+        let texts = selectedNodes.filter { $0.kind == .text }
+        guard !texts.isEmpty else { return }
+        update { for text in texts { CanvasGraph.edit(text) { $0.textSize = size } } }
+    }
+
+    /// Runs a change that can be refused (a color too close to focus red): saves it, or beeps.
+    private func change(_ change: () -> Bool) {
+        if change() {
+            save()
+            reload()
+        } else {
+            Self.refuse()
+        }
     }
 
     /// Selects a node and pans to it, e.g. from the inspector's link lists.
