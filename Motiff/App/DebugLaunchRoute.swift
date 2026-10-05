@@ -12,6 +12,7 @@ import AppKit
 ///     -MotiffSelect <title>      on a Canvas, selects the node with that title
 ///     -MotiffInspector YES       on a Canvas, opens the inspector
 ///     -MotiffDetail YES          on a Canvas, opens the selected node full size
+///     -MotiffPaste <text>        on a Canvas, pastes the text onto the selected Idea
 ///     -MotiffShortcuts YES       opens the keyboard shortcuts sheet
 ///
 /// See `.claude/skills/run-motiff/SKILL.md`.
@@ -30,6 +31,10 @@ enum DebugLaunchRoute {
 
     static var showsInspector: Bool {
         UserDefaults.standard.bool(forKey: "MotiffInspector")
+    }
+
+    static var pasteText: String? {
+        UserDefaults.standard.string(forKey: "MotiffPaste")
     }
 
     static var showsDetail: Bool {

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
 #endif
@@ -15,6 +16,7 @@ struct CanvasMapView: View {
     /// The line whose label is being typed in the Label… alert.
     @State private var labelingEdge: CanvasSnapshot.Edge?
     @State private var labelDraft = ""
+    @State private var isImporting = false
 
     /// The Map's own coordinate space, so node drags measure against something that stays put.
     private static let space = "canvas.map"
@@ -54,7 +56,9 @@ struct CanvasMapView: View {
                         camera: camera,
                         size: size,
                         isDragging: dragging.contains(node.id),
-                        isTarget: node.id == targetID || node.id == controller.linkSourceID,
+                        isTarget: node.id == targetID || node.id == controller.linkSourceID
+                            || node.id == controller.dropTargetID,
+                        isHovered: node.id == controller.hoveredNodeID,
                         isDimmed: highlighted.map { !$0.contains(node.id) } ?? false
                     )
                 }
@@ -88,7 +92,18 @@ struct CanvasMapView: View {
         .gesture(panGesture)
         #if os(macOS)
         .modifier(ScrollZoomMonitor(controller: controller))
+        // ⌘V: images, links and prompts go onto the selected Idea (or the root).
+        .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
+            let target = controller.pasteTargetID
+            Task { await controller.capture(providers, at: nil, onto: target) }
+        }
         #endif
+        .onDrop(of: CaptureService.acceptedTypes, delegate: CanvasDropDelegate(controller: controller))
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+            guard case let .success(urls) = result else { return }
+            let target = controller.pasteTargetID
+            Task { await controller.capture(urls.map { CaptureItem.file($0) }, at: nil, onto: target) }
+        }
         .focusable()
         .focused($mapFocused)
         .focusEffectDisabled()
@@ -149,6 +164,9 @@ struct CanvasMapView: View {
         .onAppear {
             controller.reload()
             if controller.editingID == nil { mapFocused = true }
+            #if DEBUG
+            controller.applyLaunchPaste()
+            #endif
         }
         .onChange(of: canvas.updatedAt) { controller.reload() }
         .onChange(of: controller.editingID) { _, editing in
@@ -165,6 +183,7 @@ struct CanvasMapView: View {
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in controller.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in controller.reload() }
+        .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
         .focusedSceneValue(\.canvasZoom, CanvasZoomActions(
             zoomIn: controller.zoomIn,
             zoomOut: controller.zoomOut,
@@ -198,13 +217,20 @@ struct CanvasMapView: View {
         size: CGSize,
         isDragging: Bool,
         isTarget: Bool,
+        isHovered: Bool,
         isDimmed: Bool
     ) -> some View {
         let isEditing = controller.editingID == node.id
         let isSelected = controller.selection.contains(node.id)
         // While typing, clicks and drags belong to the text field.
         let mask: GestureMask = isEditing ? .subviews : .all
-        return NodeView(node: node, size: geometry.rect.size, zoom: camera.zoom, editor: isEditing ? controller : nil)
+        return NodeView(
+            node: node,
+            size: geometry.rect.size,
+            zoom: camera.zoom,
+            editor: isEditing ? controller : nil,
+            isPlaying: isHovered && controller.drag == nil
+        )
             .frame(width: geometry.rect.width, height: geometry.rect.height)
             .overlay {
                 if isSelected || isTarget {
@@ -357,6 +383,35 @@ struct CanvasMapView: View {
         #else
         false
         #endif
+    }
+}
+
+/// Files, images, links and text dragged in from outside. The node under the pointer lights up;
+/// dropping on an Idea (or one of its cards) attaches to that Idea, elsewhere leaves them loose.
+private struct CanvasDropDelegate: DropDelegate {
+    let controller: CanvasController
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: CaptureService.acceptedTypes)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        controller.dropHover(at: info.location)
+        return DropProposal(operation: .copy)
+    }
+
+    func dropExited(info: DropInfo) {
+        controller.dropHover(at: nil)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let providers = info.itemProviders(for: CaptureService.acceptedTypes)
+        let location = info.location
+        let target = controller.dropTargetID
+        let controller = controller
+        controller.dropHover(at: nil)
+        Task { await controller.capture(providers, at: location, onto: target) }
+        return true
     }
 }
 

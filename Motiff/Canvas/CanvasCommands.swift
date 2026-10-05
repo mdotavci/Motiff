@@ -31,14 +31,20 @@ struct CanvasEditActions {
     var copyPrompt: @MainActor () -> Void
 }
 
+/// File › Import… (⌘O) in the focused Library or Canvas.
+struct ImportAction {
+    var run: @MainActor () -> Void
+}
+
 extension FocusedValues {
+    @Entry var importFiles: ImportAction?
     @Entry var canvasActions: CanvasActions?
     @Entry var canvasZoom: CanvasZoomActions?
     @Entry var canvasEditing: CanvasEditActions?
 }
 
 #if os(macOS)
-/// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app),
+/// File › New Canvas (⌘N), which replaces New Window (Motiff is a single-window app), Import…,
 /// the Canvas menu, and Help › Keyboard Shortcuts (⌘/).
 ///
 /// Tab, Return, Space, L, ⌫, Esc and the arrows are handled by the Map itself, not here: as menu shortcuts they'd
@@ -48,12 +54,16 @@ struct CanvasCommands: Commands {
     @FocusedValue(\.canvasActions) private var actions
     @FocusedValue(\.canvasEditing) private var editing
     @FocusedValue(\.showShortcuts) private var shortcuts
+    @FocusedValue(\.importFiles) private var importFiles
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button(ShortcutCatalog.newCanvas.title) { actions?.newCanvas() }
                 .shortcut(ShortcutCatalog.newCanvas)
                 .disabled(actions == nil)
+            Button(ShortcutCatalog.importFiles.title) { importFiles?.run() }
+                .shortcut(ShortcutCatalog.importFiles)
+                .disabled(importFiles == nil)
         }
 
         CommandMenu("Canvas") {

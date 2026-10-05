@@ -71,6 +71,13 @@ enum ShortcutCatalog {
     static let undo = Shortcut("Undo", "z", .command)
     static let redo = Shortcut("Redo", "z", [.command, .shift])
 
+    // MARK: Bringing things in
+
+    static let importFiles = Shortcut("Import Images or Videos…", "o", .command)
+    static let paste = Shortcut("Paste Images, Links or Prompts", "v", .command)
+    static let dropIn = Shortcut("Bring In Files, Images or Links", pointer: "Drag them in from Finder or a browser")
+    static let dropOnIdea = Shortcut("Attach to an Idea", pointer: "Drop onto the Idea")
+
     // MARK: Library
 
     static let largerThumbnails = Shortcut("Larger Thumbnails", "+", .command)
@@ -123,6 +130,7 @@ enum ShortcutCatalog {
 
     static let sections: [ShortcutSection] = [
         ShortcutSection(title: "Motiff", items: [newCanvas, undo, redo, showShortcuts]),
+        ShortcutSection(title: "Bringing things in", items: [importFiles, paste, dropIn, dropOnIdea]),
         ShortcutSection(title: "Library", items: [largerThumbnails, smallerThumbnails, defaultThumbnails]),
         ShortcutSection(title: "Canvas", items: [zoomIn, zoomOut, fit, pan, zoomAtPointer]),
         ShortcutSection(title: "Canvas editing", items: [

@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Environment(\.modelContext) private var context
@@ -9,6 +10,10 @@ struct LibraryView: View {
 
     @State private var availableWidth: CGFloat = 0
     @State private var pendingDelete: Reference?
+    @State private var isDropTargeted = false
+    @State private var isImporting = false
+    /// Just saved, waiting for a Why.
+    @State private var justSaved: [Reference] = []
 
     var body: some View {
         NavigationStack {
@@ -21,7 +26,46 @@ struct LibraryView: View {
                 .navigationDestination(for: Reference.self) { reference in
                     ReferenceDetailView(reference: reference)
                 }
+                // Drag in from Finder or a browser; a light outline shows it'll land.
+                .onDrop(of: CaptureService.acceptedTypes, isTargeted: $isDropTargeted) { providers in
+                    Task { await capture(CaptureService.items(from: providers)) }
+                    return true
+                }
+                .overlay {
+                    if isDropTargeted {
+                        Rectangle()
+                            .strokeBorder(Color.primary.opacity(0.5), lineWidth: 2)
+                            .allowsHitTesting(false)
+                    }
+                }
+                #if os(macOS)
+                .onPasteCommand(of: CaptureService.acceptedTypes) { providers in
+                    Task { await capture(CaptureService.items(from: providers)) }
+                }
+                #endif
+                .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+                    guard case let .success(urls) = result else { return }
+                    Task { await capture(urls.map { CaptureItem.file($0) }) }
+                }
+                .focusedSceneValue(\.importFiles, ImportAction { isImporting = true })
+                .sheet(isPresented: isAskingWhy) {
+                    WhySheet(references: justSaved)
+                }
         }
+    }
+
+    private var isAskingWhy: Binding<Bool> {
+        Binding { !justSaved.isEmpty } set: { if !$0 { justSaved = [] } }
+    }
+
+    /// Saves what came in as References, then asks why. Links have nowhere to go in the
+    /// Library (they're Canvas cards), so they're skipped.
+    private func capture(_ items: [CaptureItem]) async {
+        let prepared = await CapturePrep.prepare(items)
+        let saved = prepared.compactMap { CaptureService.makeReference($0, in: context) }
+        guard !saved.isEmpty else { return }
+        try? context.save()
+        justSaved = saved
     }
 
     @ViewBuilder

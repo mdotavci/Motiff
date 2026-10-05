@@ -22,6 +22,19 @@ enum MediaStore {
         return filename
     }
 
+    /// Copies the file at `source` into the Media folder under a new filename and returns it.
+    /// For files too big to hold in memory, like videos.
+    @discardableResult
+    static func copy(from source: URL, fileExtension: String) throws -> String {
+        let filename = "\(UUID().uuidString).\(fileExtension)"
+        do {
+            try FileManager.default.copyItem(at: source, to: url(for: filename))
+        } catch {
+            throw StoreError.writeFailed
+        }
+        return filename
+    }
+
     static func url(for filename: String) -> URL {
         AppGroup.mediaURL.appending(path: filename)
     }

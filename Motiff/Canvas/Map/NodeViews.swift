@@ -8,12 +8,14 @@ struct NodeView: View {
     let zoom: CGFloat
     /// Set while the node's text is being typed into on the Map.
     var editor: CanvasController?
+    /// GIFs and videos play only while the pointer is over them.
+    var isPlaying = false
 
     var body: some View {
         if node.isIdea {
             IdeaNodeView(node: node, diameter: size.width, editor: editor)
         } else {
-            CardView(node: node, size: size, zoom: zoom, editor: editor)
+            CardView(node: node, size: size, zoom: zoom, editor: editor, isPlaying: isPlaying)
         }
     }
 }
@@ -67,6 +69,7 @@ struct CardView: View {
     let size: CGSize
     let zoom: CGFloat
     var editor: CanvasController?
+    var isPlaying = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,7 +93,9 @@ struct CardView: View {
         switch node.kind {
         case .reference:
             if let reference = node.reference {
-                ReferenceCardContent(reference: reference, category: node.category, width: size.width, zoom: zoom)
+                ReferenceCardContent(
+                    reference: reference, category: node.category, width: size.width, zoom: zoom, isPlaying: isPlaying
+                )
             } else {
                 MissingReference()
             }
@@ -109,7 +114,7 @@ struct CardView: View {
                 NoteCardContent(text: node.body ?? "")
             }
         case .link:
-            LinkCardContent(title: node.displayTitle, url: node.url, editor: editor, nodeID: node.id)
+            LinkCardContent(title: node.displayTitle, url: node.url, iconFilename: node.iconFilename, editor: editor, nodeID: node.id)
         case .idea:
             EmptyView()
         }
@@ -124,11 +129,12 @@ private struct ReferenceCardContent: View {
     let category: CanvasCategory?
     let width: CGFloat
     let zoom: CGFloat
+    var isPlaying = false
 
     var body: some View {
         let mediaHeight = (width * reference.displayAspectRatio).rounded()
         VStack(alignment: .leading, spacing: 0) {
-            CardMedia(reference: reference, category: category, pointSize: max(width, mediaHeight) * zoom)
+            CardMedia(reference: reference, category: category, pointSize: max(width, mediaHeight) * zoom, isPlaying: isPlaying)
                 .frame(width: width, height: mediaHeight)
                 .clipped()
                 .overlay(alignment: .topLeading) {
@@ -202,9 +208,12 @@ private struct CardMedia: View {
     let category: CanvasCategory?
     /// Longest side as drawn on screen, in points.
     let pointSize: CGFloat
+    var isPlaying = false
 
     var body: some View {
-        if reference.hasMedia {
+        if reference.hasMedia, isPlaying, reference.mediaType != .image {
+            ReferenceMediaView(reference: reference)
+        } else if reference.hasMedia {
             ThumbnailImage(url: reference.mediaURL, pointSize: pointSize)
         } else {
             TypographicCover(text: reference.copyablePrompt ?? "", background: category?.hexColor)
@@ -230,16 +239,24 @@ private struct NoteCardContent: View {
 private struct LinkCardContent: View {
     let title: String
     let url: URL?
+    let iconFilename: String?
     var editor: CanvasController?
     let nodeID: UUID
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "globe")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+            Group {
+                if let iconFilename, !iconFilename.isEmpty {
+                    ThumbnailImage(url: MediaStore.url(for: iconFilename), pointSize: 28, contentMode: .fit)
+                        .padding(4)
+                } else {
+                    Image(systemName: "globe")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 28, height: 28)
+            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 1) {
                 Group {
                     if let editor {

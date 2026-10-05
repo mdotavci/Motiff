@@ -64,6 +64,9 @@ final class CanvasController {
         }
     }
 
+    /// The node under something being dragged in from outside; dropping attaches to its Idea.
+    private(set) var dropTargetID: UUID?
+
     /// L: click two nodes to link them. `linkSourceID` is the first one clicked.
     private(set) var linkMode = false
     private(set) var linkSourceID: UUID?
@@ -568,6 +571,66 @@ final class CanvasController {
         #endif
     }
 
+    // MARK: Bringing things in
+
+    /// Where a drag from outside is: the node under it lights up.
+    func dropHover(at viewPoint: CGPoint?) {
+        let target = viewPoint.flatMap { snapshot.node(at: camera.canvasPoint($0, in: viewSize)) }?.id
+        if target != dropTargetID { dropTargetID = target }
+    }
+
+    /// The Idea pasted and imported things attach to: the selected one, or the root.
+    var pasteTargetID: UUID? { anchorIdea?.id }
+
+    /// Reads, prepares and places what was dropped or pasted.
+    func capture(_ providers: [NSItemProvider], at viewPoint: CGPoint?, onto targetID: UUID?) async {
+        let items = await CaptureService.items(from: providers)
+        await capture(items, at: viewPoint, onto: targetID)
+    }
+
+    func capture(_ items: [CaptureItem], at viewPoint: CGPoint?, onto targetID: UUID?) async {
+        let prepared = await CapturePrep.prepare(items)
+        let point = viewPoint.map { camera.canvasPoint($0, in: viewSize) } ?? camera.center
+        place(prepared, at: point, onto: targetID)
+    }
+
+    /// Puts captured things on the Canvas, all in one Undo step. Dropped on an Idea (or one of
+    /// its cards) they belong to that Idea and take free spots around it; dropped on empty space
+    /// they stay loose where they landed, fanned out a little.
+    func place(_ prepared: [PreparedCapture], at point: CGPoint, onto targetID: UUID?) {
+        guard let context, !prepared.isEmpty else {
+            if prepared.isEmpty { Self.refuse() }
+            return
+        }
+        endEditing()
+        let target = targetID.flatMap { self.node($0) }
+        let idea = target.flatMap { $0.isIdea ? $0 : $0.ancestors.first(where: \.isIdea) }
+        var made: [CanvasNode] = []
+        for item in prepared {
+            let offset = CGFloat(made.count) * 28
+            let position = CGPoint(x: point.x + offset, y: point.y + offset)
+            let node: CanvasNode
+            switch item {
+            case let .link(url, title, iconFilename):
+                node = CanvasGraph.addNode(.link, to: canvas, parent: idea, at: position, title: title, in: context)
+                node.urlString = url.absoluteString
+                node.iconFilename = iconFilename
+            case .media, .prompt:
+                guard let reference = CaptureService.makeReference(item, in: context) else { continue }
+                node = CanvasGraph.addNode(
+                    reference.hasMedia ? .reference : .prompt,
+                    to: canvas, parent: idea, at: position, reference: reference, in: context
+                )
+            }
+            if let idea { node.position = CanvasGraph.freeSpot(for: node, around: idea) }
+            made.append(node)
+        }
+        save()
+        reload()
+        selection = Set(made.map(\.id))
+        if let last = made.last { reveal(last.id) }
+    }
+
     // MARK: Detail
 
     var detailItem: DetailItem? { detailPath.last }
@@ -642,6 +705,16 @@ final class CanvasController {
     }
 
     #if DEBUG
+    private static var didApplyLaunchPaste = false
+
+    /// `-MotiffPaste <text>` pastes that text onto the selected Idea once, as ⌘V would.
+    func applyLaunchPaste() {
+        guard !Self.didApplyLaunchPaste, let text = DebugLaunchRoute.pasteText else { return }
+        Self.didApplyLaunchPaste = true
+        let target = pasteTargetID
+        Task { await capture([.text(text)], at: nil, onto: target) }
+    }
+
     /// `-MotiffSelect <title>` selects a node; `-MotiffInspector YES` opens the inspector.
     private func applyLaunchSelection() {
         guard let title = DebugLaunchRoute.selectTitle,
